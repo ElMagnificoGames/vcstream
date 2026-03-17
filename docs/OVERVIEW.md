@@ -266,73 +266,78 @@ Transforms user actions and system events into structured control messages:
 
 ## Suggested subsystem decomposition
 
-### AppShell
+### AppSupervisor
 Responsible for:
 - startup
 - settings loading/saving
 - role enablement
 - major subsystem lifecycle
 
-### SessionManager
+### RoomSession
 Responsible for:
 - connection state
 - room membership
 - participant/source metadata
 - join/leave/reconnect flow
 
-### RelayEngine
+### RelayServer
 Responsible for:
 - listening for inbound connections
 - accepting clients
 - source forwarding
 - subscription-aware routing
 
-### SourceRegistry
+### SourceCatalogue
 Responsible for:
 - tracking locally published sources
 - tracking remotely announced sources
 - maintaining source identity and state
 
-### CaptureManager
+### MediaCapture
 Responsible for:
 - enumerating cameras/microphones/screens/windows
 - starting/stopping capture
 - reporting source state changes
 
-### AudioRouter / Mixer
+### MusicPlaylistSource
+Responsible for:
+- queue/playlist control
+- playback controls (play/pause/seek/loop)
+- publishing music as a distinct audio source
+
+### AudioGraph
 Responsible for:
 - keeping voice and music as separate logical sources
 - local volume/mute control
 - routing local playback and outbound publication appropriately
 - optional later mixing where truly needed
 
-### RenderManager
+### VideoGraph
+Responsible for:
+- decode and transform pipeline
+- optional filter chains
+- routing video to one or more sinks
+
+### VideoRenderer
 Responsible for:
 - local previews
 - remote video presentation
 - one window per remote video source where required
 
-### ChatService
+### TextChat
 Responsible for:
 - sending and receiving room text chat
 - optional small bounded in-memory history
 - displaying system/status messages
 
-### MusicPlaybackService
-Responsible for:
-- local file playback
-- queue/playlist handling
-- looping
-- publishing music as a distinct audio source
-
-### ObsBridge
+### HttpMediaServer
 Responsible for:
 - enabling/disabling HTTP export
 - binding source IDs to export endpoints
-- serving localhost pages for OBS
-- later, optionally serving trusted-LAN pages
+- serving localhost pages/media for browser-source-style consumers
+- later, optionally serving trusted-LAN pages/media
 
-### DiagnosticsService
+### Diagnostics
 Responsible for:
 - structured logging
 - state inspection
@@ -355,7 +360,7 @@ The following entities should exist explicitly.
 Possible flags:
 - participant
 - relay
-- obs_bridge
+- http_export
 
 ### Participant
 Fields:

@@ -2,11 +2,12 @@
 
 ## Additional Context
 
+- `docs/BUILD.md` provides build and run instructions.
 - `docs/CODE-QT6.md` provides all coding conventions and a great deal of the AI-operation policies for working with this codebase.  This is **MANDATORY** reading.
 - `docs/HISTORY.md` provides a description of what work has been completed so far.
+- `docs/MODULES.md` defines the initial module boundaries and dependency direction.
 - `docs/OVERVIEW.md` provides onboarding information to understand this project and its goals.
 - `docs/ROADMAP.md` provides a detailed account of what is to be done (broken down into manageable tasks).
-- `docs/BUILD.md` provides build and run instructions.
 
 ## Tooling
 

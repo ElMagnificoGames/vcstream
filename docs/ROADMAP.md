@@ -73,17 +73,19 @@ Never write for the happy path only.
 
 **Expected output:**
 - short design note listing proposed modules, for example:
-  - `AppShell`
-  - `SessionManager`
-  - `RelayEngine`
-  - `SourceRegistry`
-  - `CaptureManager`
-  - `AudioRouter`
-  - `RenderManager`
-  - `ChatService`
-  - `MusicPlaybackService`
-  - `ObsBridge`
-  - `DiagnosticsService`
+  - `AppSupervisor`
+  - `SharedTypes`
+  - `RoomSession`
+  - `RelayServer`
+  - `SourceCatalogue`
+  - `MediaCapture`
+  - `MusicPlaylistSource`
+  - `AudioGraph`
+  - `VideoGraph`
+  - `VideoRenderer`
+  - `TextChat`
+  - `HttpMediaServer`
+  - `Diagnostics`
   - `RendezvousClient` (placeholder only, optional extension)
 
 **Completion criteria:**

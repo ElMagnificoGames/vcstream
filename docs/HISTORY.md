@@ -33,3 +33,30 @@
 - App entry point: `apps/vcstream/main.cpp`.
 - QML is embedded via Qt resources: `apps/vcstream/qml/qml.qrc` and `apps/vcstream/qml/main.qml`.
 - Build/run documentation: `docs/BUILD.md`.
+
+## Task 0.3 — Define initial module boundaries
+
+### What
+
+- Added an initial module-boundaries design note describing the intended major services/classes and their responsibility boundaries.
+- Recorded an initial dependency direction to discourage early dependency cycles.
+
+### Why
+
+- The repository's long-term architecture has several interacting subsystems (capture, render, relay, HTTP media server, coordination).
+- A concrete decomposition and dependency direction reduces accidental overlap and keeps later work (UI shell, transport/protocol ADRs, module DD files) coherent.
+
+### Acceptance criteria
+
+- Each proposed module has a one-paragraph responsibility summary.
+- Obvious overlaps/conflicts are called out explicitly.
+- At least one dependency direction rule is recorded.
+
+### Decisions
+
+- Introduced `SharedTypes` as a small, shared home for the core data model types/ids described in `docs/OVERVIEW.md`, to reduce cross-module coupling.
+- Declared `Diagnostics` as sink-like (many-to-one), to reduce the risk of dependency cycles.
+
+### Technical notes
+
+- Module-boundaries note: `docs/MODULES.md`.
