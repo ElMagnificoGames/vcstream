@@ -1,0 +1,15 @@
+# CMake out-of-tree builds
+/build/
+/build-*/
+
+# CMake in-source artefacts
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/compile_commands.json
+/CTestTestfile.cmake
+/Testing/
+
+# IDE/editor
+/.vscode/
+/.idea/
