@@ -11,6 +11,7 @@
 int main( int argc, char **argv )
 {
     int exitCode;
+
     QGuiApplication app( argc, argv );
     QQmlApplicationEngine engine;
     const QUrl mainUrl( QStringLiteral( "qrc:/qml/main.qml" ) );

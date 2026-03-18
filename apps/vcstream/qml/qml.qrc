@@ -1,5 +1,8 @@
 <RCC>
     <qresource prefix="/qml">
         <file>main.qml</file>
+        <file>LandingPage.qml</file>
+        <file>ShellPage.qml</file>
+        <file>HelpTip.qml</file>
     </qresource>
 </RCC>

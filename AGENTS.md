@@ -16,6 +16,8 @@ This repository uses CMake.
 
 Unit tests use QtTest and live under `apps/unittests/`. Shared unit test helper utilities live under `apps/unittests/helpers/`.
 
+QML UI smoke tests live under `apps/unittests/qml/` and MUST fail on any Qt/QML warning.
+
 Canonical build and run instructions live in `docs/BUILD.md`.
 
 Common commands (from the repository root):
@@ -102,3 +104,45 @@ When adding or editing any module DD file (`*-dd.txt`), follow this checklist.
   - include a "State model" section (thread affinity, lifetime/ownership expectations, and re-entrancy where relevant)
 - Use the DD template in `docs/DD-TEMPLATE.txt` as the starting point.
 - Keep the Public interface section contract-like (arguments, ownership, lifetime, thread safety, errors).
+
+## UX and UI
+
+### Copy
+
+User-facing UI labels and control names should describe user intent in simple, non-technical language.
+
+- Prefer human wording over implementation terms (for example: "Join room" rather than "Connect to relay").
+- Use hover/tooltip text to provide optional power-user detail, still written in plain language.
+- If the roadmap uses technical wording for a capability, treat it as implementation vocabulary and re-evaluate the user-facing copy when implementing the UI.
+
+### Colours and themes
+
+Future versions of this application may allow the user to choose a Qt theme/style. UI colours must therefore be theme-aware.
+
+- Do not hardcode light/dark UI colours for surfaces, text, or borders (for example: `#ffffff`, `#000000`).
+- Prefer palette-derived colours from the active style (for example: `Control.palette`, `ApplicationWindow.palette`, or `SystemPalette`).
+- Do not use `opacity` on containers that contain text/controls (it dims children and reduces readability); prefer alpha in the background `color` instead.
+
+### Interaction stability (avoid oscillation)
+
+Be careful with UI elements that appear/disappear on hover or focus.
+
+- Hover help (tooltips, help text, popups) MUST NOT participate in layout sizing of the hovered control or its parents.
+- Render hover help in an overlay layer so showing/hiding it cannot move surrounding elements.
+- Watch for hover oscillation loops (cursor hovers -> UI appears -> geometry shifts -> hover ends -> geometry shifts back -> hover starts).
+- If you add or change hover behaviour, extend `apps/unittests/qml/tst_qml_ui.cpp` to reproduce it (hover/move/click-outside) and ensure it emits no warnings.
+
+### QML warning hygiene
+
+QML warnings are treated as test failures.
+
+- If you change QML behaviour, you MUST update `apps/unittests/qml/tst_qml_ui.cpp` to navigate to the new/changed UI state and interact with it (click/hover/type as appropriate).
+- Add stable `objectName` values in QML for any controls that tests need to locate.
+- Prefer testing real user flows (start screen -> join/host -> disconnect) rather than directly poking internal state.
+- Avoid deprecated implicit signal parameter injection in QML handlers. Prefer explicit function parameters (for example: `onPressed: function( mouse ) { ... }`).
+- Ensure the warning gate actually intercepts warnings: capture both `QQmlApplicationEngine::warnings` and Qt message output, and install message handlers within the QtTest lifecycle (for example: `initTestCase` / `cleanupTestCase`).
+
+## British spelling
+
+- Use British spelling, for example: "centre", "colour", "behaviour", "organisation", "optimise".  This includes, but is not limited to, in source code, documentation, and user-facing UI copy.
+- Do not change established external names/identifiers (Qt types/APIs, class names, file names, protocol fields, third-party terminology) or quotations.

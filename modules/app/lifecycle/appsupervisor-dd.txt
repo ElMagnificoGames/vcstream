@@ -17,6 +17,18 @@ State model:
 - `QString appVersion() const` returns the application version string.
 - `void shutdown()` performs orderly shutdown of owned services.
 
+- `bool joinRoomEnabled() const` returns whether the local instance is configured to join a room.
+- `void setJoinRoomEnabled( bool enabled )` sets whether the local instance is configured to join a room.
+
+  Notes:
+  - Setting the property to its current value is a no-op and does not emit a change signal.
+
+- `bool hostRoomEnabled() const` returns whether the local instance is configured to host a room.
+- `void setHostRoomEnabled( bool enabled )` sets whether the local instance is configured to host a room.
+
+  Notes:
+  - Setting the property to its current value is a no-op and does not emit a change signal.
+
 Thread safety:
 - Thread-safe: No.
 - Re-entrant: No.

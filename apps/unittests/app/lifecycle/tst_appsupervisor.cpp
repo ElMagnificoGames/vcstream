@@ -1,6 +1,7 @@
 #include <QtTest/QTest>
 
 #include <QCoreApplication>
+#include <QSignalSpy>
 
 #include "modules/app/lifecycle/appsupervisor.h"
 
@@ -13,6 +14,10 @@ class tst_AppSupervisor : public QObject
 private Q_SLOTS:
     void appVersion_roundTripsExplicitValues();
     void appVersion_roundTripsDeterministicRandomAscii();
+    void joinRoomEnabled_defaultsToFalse();
+    void joinRoomEnabled_emitsChangedOnlyOnChange();
+    void hostRoomEnabled_defaultsToFalse();
+    void hostRoomEnabled_emitsChangedOnlyOnChange();
     void shutdown_isSafeToCall();
 };
 
@@ -70,6 +75,60 @@ void tst_AppSupervisor::shutdown_isSafeToCall()
     AppSupervisor supervisor;
 
     supervisor.shutdown();
+}
+
+void tst_AppSupervisor::joinRoomEnabled_defaultsToFalse()
+{
+    AppSupervisor supervisor;
+
+    QCOMPARE( supervisor.joinRoomEnabled(), false );
+}
+
+void tst_AppSupervisor::joinRoomEnabled_emitsChangedOnlyOnChange()
+{
+    AppSupervisor supervisor;
+    QSignalSpy spy( &supervisor, &AppSupervisor::joinRoomEnabledChanged );
+
+    supervisor.setJoinRoomEnabled( false );
+    QCOMPARE( spy.count(), 0 );
+
+    supervisor.setJoinRoomEnabled( true );
+    QCOMPARE( spy.count(), 1 );
+    QCOMPARE( supervisor.joinRoomEnabled(), true );
+
+    supervisor.setJoinRoomEnabled( true );
+    QCOMPARE( spy.count(), 1 );
+
+    supervisor.setJoinRoomEnabled( false );
+    QCOMPARE( spy.count(), 2 );
+    QCOMPARE( supervisor.joinRoomEnabled(), false );
+}
+
+void tst_AppSupervisor::hostRoomEnabled_defaultsToFalse()
+{
+    AppSupervisor supervisor;
+
+    QCOMPARE( supervisor.hostRoomEnabled(), false );
+}
+
+void tst_AppSupervisor::hostRoomEnabled_emitsChangedOnlyOnChange()
+{
+    AppSupervisor supervisor;
+    QSignalSpy spy( &supervisor, &AppSupervisor::hostRoomEnabledChanged );
+
+    supervisor.setHostRoomEnabled( false );
+    QCOMPARE( spy.count(), 0 );
+
+    supervisor.setHostRoomEnabled( true );
+    QCOMPARE( spy.count(), 1 );
+    QCOMPARE( supervisor.hostRoomEnabled(), true );
+
+    supervisor.setHostRoomEnabled( true );
+    QCOMPARE( spy.count(), 1 );
+
+    supervisor.setHostRoomEnabled( false );
+    QCOMPARE( spy.count(), 2 );
+    QCOMPARE( supervisor.hostRoomEnabled(), false );
 }
 
 QTEST_MAIN( tst_AppSupervisor )

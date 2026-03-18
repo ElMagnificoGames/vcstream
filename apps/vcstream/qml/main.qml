@@ -9,250 +9,62 @@ ApplicationWindow {
     visible: true
     title: "vcstream"
 
-    header: ToolBar {
-        contentHeight: 44
+    function goToLanding() {
+        stackView.clear()
+        stackView.push( landingComponent )
+    }
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: 10
-            spacing: 12
+    function goToShellForJoin() {
+        if ( appSupervisor ) {
+            appSupervisor.joinRoomEnabled = true
+            appSupervisor.hostRoomEnabled = false
+        }
 
-            Label {
-                text: "vcstream"
-                font.pixelSize: 18
-                Layout.alignment: Qt.AlignVCenter
+        stackView.clear()
+        stackView.push( shellComponent )
+    }
+
+    function goToShellForHost() {
+        if ( appSupervisor ) {
+            appSupervisor.hostRoomEnabled = true
+            appSupervisor.joinRoomEnabled = false
+        }
+
+        stackView.clear()
+        stackView.push( shellComponent )
+    }
+
+    Component {
+        id: landingComponent
+
+        LandingPage {
+            onJoinRequested: {
+                root.goToShellForJoin()
             }
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            CheckBox {
-                text: "Connect"
-            }
-
-            CheckBox {
-                text: "Host Relay"
-            }
-
-            CheckBox {
-                text: "OBS Bridge"
+            onHostRequested: {
+                root.goToShellForHost()
             }
         }
     }
 
-    footer: ToolBar {
-        contentHeight: 30
+    Component {
+        id: shellComponent
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: 10
-            spacing: 10
+        ShellPage {
+            onDisconnectRequested: {
+                if ( appSupervisor ) {
+                    appSupervisor.joinRoomEnabled = false
+                    appSupervisor.hostRoomEnabled = false
+                }
 
-            Label {
-                text: ( appSupervisor ? ( "Version " + appSupervisor.appVersion ) : "" )
-                opacity: 0.75
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Label {
-                text: "Shell only"
-                opacity: 0.75
+                root.goToLanding()
             }
         }
     }
 
-    SplitView {
+    StackView {
+        id: stackView
         anchors.fill: parent
-        orientation: Qt.Horizontal
-
-        Pane {
-            SplitView.preferredWidth: 260
-            SplitView.minimumWidth: 220
-            padding: 10
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 10
-
-                Frame {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 8
-
-                        Label {
-                            text: "Participants"
-                            font.pixelSize: 14
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            radius: 6
-                            color: "#000000"
-                            opacity: 0.08
-
-                            Label {
-                                anchors.centerIn: parent
-                                text: "(placeholder)"
-                                opacity: 0.65
-                            }
-                        }
-                    }
-                }
-
-                Frame {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 170
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 8
-
-                        Label {
-                            text: "Sources"
-                            font.pixelSize: 14
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            radius: 6
-                            color: "#000000"
-                            opacity: 0.08
-
-                            Label {
-                                anchors.centerIn: parent
-                                text: "(placeholder)"
-                                opacity: 0.65
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Pane {
-            SplitView.preferredWidth: 520
-            SplitView.minimumWidth: 320
-            padding: 10
-
-            Frame {
-                anchors.fill: parent
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 10
-                    color: "#000000"
-                    opacity: 0.06
-
-                    Label {
-                        anchors.centerIn: parent
-                        text: "Stage / Video Area"
-                        font.pixelSize: 18
-                        opacity: 0.75
-                    }
-                }
-            }
-        }
-
-        Pane {
-            SplitView.preferredWidth: 320
-            SplitView.minimumWidth: 260
-            padding: 10
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 10
-
-                TabBar {
-                    id: rightTabs
-                    Layout.fillWidth: true
-
-                    TabButton { text: "Chat" }
-                    TabButton { text: "Diagnostics" }
-                }
-
-                StackLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    currentIndex: rightTabs.currentIndex
-
-                    Frame {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 8
-
-                            Label {
-                                text: "Chat"
-                                font.pixelSize: 14
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 6
-                                color: "#000000"
-                                opacity: 0.08
-
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "(placeholder)"
-                                    opacity: 0.65
-                                }
-                            }
-
-                            TextField {
-                                Layout.fillWidth: true
-                                placeholderText: "Type a message (placeholder)"
-                                enabled: false
-                            }
-                        }
-                    }
-
-                    Frame {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 8
-
-                            Label {
-                                text: "Diagnostics"
-                                font.pixelSize: 14
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 6
-                                color: "#000000"
-                                opacity: 0.08
-
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "(placeholder)"
-                                    opacity: 0.65
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        initialItem: landingComponent
     }
 }

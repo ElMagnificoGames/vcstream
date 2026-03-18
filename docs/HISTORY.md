@@ -98,3 +98,40 @@
   - Shared helpers: `apps/unittests/helpers/test_random.h`.
 - QML/C++ boundary documentation (repo-specific rule): `docs/MODULES.md`.
 - QML/C++ boundary documentation (generic guideline): `docs/CODE-QT6.md`.
+
+## Task 1.2 — Add role enablement UI
+
+### What
+
+- Updated the role control copy to be user-intent phrased ("Join room" and "Host room") with hover tooltips for optional detail.
+- Added `AppSupervisor` state for join/host role enablement and exposed it to QML via `Q_PROPERTY`.
+- Added unit tests covering role state defaults and change-signal behaviour.
+- Reframed the HTTP export capability as "Browser Export" (not OBS-specific) and shifted the UI concept away from a global toggle toward per-source export toggles (placeholder-only for now).
+- Updated documentation to encode the UI copy principle and to rename "OBS bridge" terminology to "Browser Export".
+
+### Why
+
+- The user-facing UI should avoid networking jargon and describe intent for non-technical participants.
+- Role enablement state needs a concrete C++ surface early so later networking/HTTP work has a stable wiring point.
+- The HTTP export feature is useful beyond OBS; naming and UI structure should not imply it is OBS-only or global.
+
+### Acceptance criteria
+
+- User can toggle join/host role enablement in the UI.
+- Current local role state is visible.
+- UI state changes do not crash the app.
+
+### Decisions
+
+- UI copy: prefer user-intent wording with plain-language tooltips for power-user detail.
+- Feature naming: renamed "OBS bridge" to "Browser Export" to reflect a general browser-source style local export.
+- UI shape: Browser Export is treated as a per-source export (not a global role toggle).
+
+### Technical notes
+
+- Role state surface: `modules/app/lifecycle/appsupervisor.h`, `modules/app/lifecycle/appsupervisor.cpp`, `modules/app/lifecycle/appsupervisor-dd.txt`.
+- Role UI bindings: `apps/vcstream/qml/main.qml`, `apps/vcstream/qml/LandingPage.qml`, `apps/vcstream/qml/ShellPage.qml`.
+- Role tests: `apps/unittests/app/lifecycle/tst_appsupervisor.cpp`.
+- Documentation updates:
+  - UI copy guideline: `AGENTS.md`, `docs/ROADMAP.md`.
+  - Rename to Browser Export: `docs/OVERVIEW.md`, `docs/ROADMAP.md`.

@@ -11,6 +11,7 @@ It is deliberately broken into small tasks that are realistic to complete in one
 - When a task exposes a high-impact design choice, pause and write a short decision note before hard-coding it.
   - If you are an AI agent, always ask the user what to do.
 - If a task finishes with uncertainty, record the uncertainty explicitly rather than hiding it.
+- UI copy note: roadmap wording is often technical. User-facing UI labels should be user-intent phrased and non-technical; use tooltips for optional power-user detail.
 
 ## Definition of done for roadmap tasks
 
@@ -19,6 +20,7 @@ Unless a task says otherwise, a task is “done” only if:
 - the behaviour can be demonstrated or observed
 - obvious failure paths do not crash the app
 - any notable decision is written down
+- QML UI tests (where applicable) exercise the changed UI and emit no Qt/QML warnings
 
 ## Fault tolerance
 
@@ -116,9 +118,9 @@ Never write for the happy path only.
 
 ### Task 1.2 — Add role enablement UI
 **Goal:** support:
-- connect to relay
-- host relay
-- enable OBS bridge
+- join room
+- host room
+- enable Browser Export for selected sources
 
 **Completion criteria:**
 - user can toggle/select these modes in UI
@@ -429,10 +431,10 @@ This decision should explicitly consider:
 
 ---
 
-## Phase 10 — OBS bridge (localhost first)
+## Phase 10 — Browser Export (localhost first)
 
 ### Task 10.1 — Implement localhost HTTP server skeleton
-**Goal:** create the local bridge service.
+**Goal:** create the local Browser Export service.
 
 **Completion criteria:**
 - service binds to localhost only
@@ -519,8 +521,8 @@ This decision should explicitly consider:
 - user-facing trust prompt or trust storage exists
 - trust failures are handled clearly
 
-### Task 12.2 — Review OBS bridge exposure safety
-**Goal:** ensure OBS bridge cannot accidentally become an internet-exposed service.
+### Task 12.2 — Review Browser Export exposure safety
+**Goal:** ensure Browser Export cannot accidentally become an internet-exposed service.
 
 **Completion criteria:**
 - localhost-only binding is enforced or clearly justified otherwise
@@ -536,7 +538,7 @@ This decision should explicitly consider:
 
 ---
 
-## Phase 13 — Trusted-LAN OBS extension
+## Phase 13 — Trusted-LAN Browser Export extension
 
 ### Task 13.1 — Write a LAN bridge scope note
 **Goal:** define what “trusted LAN” means for this project.
@@ -729,7 +731,7 @@ This decision should explicitly consider:
 - at least one extra video source works
 - basic room chat works
 - each remote video source can be shown separately
-- OBS localhost bridge can expose selected sources
+- Browser Export can expose selected sources
 - encryption is enabled for non-local traffic
 - music can be published as a separate audio source
 
@@ -766,7 +768,7 @@ When working on this project, the AI agent should:
    - If a proposed change hides or muddles source identity, reconsider it.
 
 3. **Preserve role decoupling.**
-   - Relay hosting and OBS bridge are optional capabilities, not separate products.
+   - Relay hosting and Browser Export are optional capabilities, not separate products.
 
 4. **Record decisions.**
    - If a meaningful choice is made, write it down.
@@ -803,7 +805,7 @@ These are deliberate future decision points.
 - Exact encryption/trust implementation details
 - Exact serialisation format for control messages
 - Whether the internal primary term should be `Source` or `Track`
-- Whether OBS bridge pages are rendered from decoded local state or another local media surface
+- Whether Browser Export pages are rendered from decoded local state or another local media surface
 - Windows installer technology
 - Linux packaging format
 - Whether relay can optionally be headless later

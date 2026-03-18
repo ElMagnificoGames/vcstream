@@ -9,7 +9,7 @@ It is intended for a private group that needs something more production-friendly
 The application targets:
 - **Windows and Linux**
 - **C++ with Qt 6**
-- **one application** that can act as participant, relay host, and/or OBS bridge
+- **one application** that can act as participant, relay host, and/or Browser Export
 - **direct connection by IP/port** for the core version
 - an **optional rendezvous/NAT-traversal extension** for easier peer discovery and reduced reliance on port forwarding
 
@@ -28,7 +28,7 @@ The application supports three core roles, which may be combined in one running 
   - publish local media
   - receive remote media
   - render remote media locally
-  - optionally expose locally available media to OBS
+  - optionally expose locally available media via Browser Export (for OBS Browser Source and other tools)
 
 - **Relay host**
   - listen for inbound client connections
@@ -37,17 +37,17 @@ The application supports three core roles, which may be combined in one running 
   - may run over LAN, VPN, or the public internet
   - in the simplest deployment, the host handles port forwarding if needed
 
-- **OBS bridge**
+- **Browser Export**
   - expose selected **locally available** media over HTTP
-  - intended for OBS Browser Source and/or local production tooling
+  - intended for OBS Browser Source and other browser-source style consumers
   - can be enabled on **any** client, not just the relay host
   - should support **localhost first**, with **trusted-LAN output** as an optional extension
 
 Valid combinations include:
 - participant only
-- participant + OBS bridge
+- participant + Browser Export
 - participant + relay
-- participant + relay + OBS bridge
+- participant + relay + Browser Export
 
 The relay host, the DJ/music publisher, and the person running OBS do **not** need to be the same person.
 
@@ -94,7 +94,7 @@ Out of scope unless explicitly revisited:
 - stickers/reactions/emojis
 - mobile apps
 - browser-first clients
-- public internet exposure of the OBS bridge
+- public internet exposure of Browser Export
 - complicated moderation/admin systems
 - fully general public-service media relaying
 - end-to-end encryption across independently relayed media hops, unless deliberately planned
@@ -158,7 +158,7 @@ Every running instance is fundamentally a **participant node**.
 
 Optional capabilities:
 - relay hosting
-- OBS bridge
+- Browser Export
 - later, perhaps rendezvous publication/lookup support
 
 This avoids duplicated code and matches real usage better than rigid “server vs client” binaries.
@@ -177,7 +177,7 @@ Handles:
 - text chat
 - diagnostics/status messages
 - authentication/admission decisions
-- OBS export bindings
+- Browser Export bindings
 - music source control metadata
 
 #### 2. Media area
@@ -191,11 +191,11 @@ Handles:
 - render/playback
 - mixing or routing of distinct audio sources
 
-#### 3. OBS presentation area
+#### 3. Browser Export presentation area
 Handles:
 - exposing selected locally available media via HTTP
 - simple endpoints such as `/solo/<source-id>`
-- localhost-first presentation for OBS Browser Source
+- localhost-first presentation for browser-source consumers such as OBS Browser Source
 - optional trusted-LAN presentation later
 
 The OBS presentation area should **not** be part of the relay architecture. It is a local adapter.
@@ -435,7 +435,7 @@ Encrypt all **non-local** traffic by default.
 ### Practical split
 - **Control area**: encrypted reliable channel
 - **Media area**: encrypted transport
-- **OBS bridge**: plain HTTP is acceptable if bound strictly to `127.0.0.1`; trusted-LAN mode needs deliberate opt-in and careful scoping
+- **Browser Export**: plain HTTP is acceptable if bound strictly to `127.0.0.1`; trusted-LAN mode needs deliberate opt-in and careful scoping
 - **Rendezvous service**: encrypted control traffic
 
 ### Guidance
@@ -492,9 +492,9 @@ Do **not** make v1 depend on capturing arbitrary external application audio on W
 
 ---
 
-## OBS bridge guidance
+## Browser Export guidance
 
-The OBS bridge should be locally enableable on **any client**.
+Browser Export should be locally enableable on **any client**.
 
 This is important because:
 - the relay host and the stream producer may be different people
@@ -502,7 +502,7 @@ This is important because:
 - the production machine can then expose those sources to OBS locally
 
 ### Design guidance
-The OBS bridge should work only from **locally available sources**.
+Browser Export should work only from **locally available sources**.
 
 It should not bypass normal subscription/routing logic or create a special hidden second client model.
 
@@ -510,7 +510,7 @@ It should not bypass normal subscription/routing logic or create a special hidde
 Support endpoints that map one locally received video source to one localhost URL/page.
 
 ### Later optional extension
-Allow the bridge to bind to a chosen **trusted LAN** interface so a second PC on the LAN can consume the source in OBS.
+Allow the export service to bind to a chosen **trusted LAN** interface so a second PC on the LAN can consume the source in OBS (or other browser-source tooling).
 
 ---
 
@@ -604,7 +604,7 @@ These are deliberate future decision points.
 - Exact encryption/trust implementation details
 - Exact serialisation format for control messages
 - Whether the internal code/protocol should use `Source` or `Track` as the primary type name
-- Whether OBS bridge pages are rendered from decoded local state or another local media surface
+- Whether Browser Export pages are rendered from decoded local state or another local media surface
 - Windows installer technology
 - Linux packaging format
 - Whether relay can optionally be headless later
