@@ -1,3 +1,4 @@
 add_subdirectory( app/lifecycle )
+add_subdirectory( app/defence )
 add_subdirectory( qml )
 add_subdirectory( ui/geometry )

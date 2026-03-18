@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QSignalSpy>
 
+#include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
 
 #include "apps/unittests/helpers/test_random.h"
@@ -132,6 +133,26 @@ void tst_AppSupervisor::hostRoomEnabled_emitsChangedOnlyOnChange()
     QCOMPARE( supervisor.hostRoomEnabled(), false );
 }
 
-QTEST_MAIN( tst_AppSupervisor )
+int main( int argc, char **argv )
+{
+    int exitCode;
+
+    crashguard::installTerminateHandler();
+
+    exitCode = crashguard::runGuardedMain( "tst_appsupervisor main", [argc, argv]() -> int {
+        int localArgc;
+        char **localArgv;
+
+        localArgc = argc;
+        localArgv = argv;
+
+        QCoreApplication app( localArgc, localArgv );
+        tst_AppSupervisor tc;
+        const int result = QTest::qExec( &tc, localArgc, localArgv );
+        return result;
+    } );
+
+    return exitCode;
+}
 
 #include "tst_appsupervisor.moc"

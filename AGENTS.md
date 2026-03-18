@@ -115,6 +115,7 @@ User-facing UI labels and control names should describe user intent in simple, n
 - Prefer human wording over implementation terms (for example: "Join room" rather than "Connect to relay").
 - Use hover/tooltip text to provide optional power-user detail, still written in plain language.
 - If the roadmap uses technical wording for a capability, treat it as implementation vocabulary and re-evaluate the user-facing copy when implementing the UI.
+- This isn't limited to QML, user-facing copy can include things like logged error messages in C++, etc.
 
 ### Colours and themes
 

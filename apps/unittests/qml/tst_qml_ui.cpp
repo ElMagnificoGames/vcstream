@@ -21,6 +21,7 @@
 #include <QUrl>
 #include <QtGlobal>
 
+#include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
 #include "modules/ui/placement/windowplacement.h"
 
@@ -452,10 +453,24 @@ void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
 
 int main( int argc, char **argv )
 {
-    QGuiApplication app( argc, argv );
-    tst_QmlUi tc;
-    const int result = QTest::qExec( &tc, argc, argv );
-    return result;
+    int exitCode;
+
+    crashguard::installTerminateHandler();
+
+    exitCode = crashguard::runGuardedMain( "tst_qml_ui main", [argc, argv]() -> int {
+        int localArgc;
+        char **localArgv;
+
+        localArgc = argc;
+        localArgv = argv;
+
+        QGuiApplication app( localArgc, localArgv );
+        tst_QmlUi tc;
+        const int result = QTest::qExec( &tc, localArgc, localArgv );
+        return result;
+    } );
+
+    return exitCode;
 }
 
 #include "tst_qml_ui.moc"

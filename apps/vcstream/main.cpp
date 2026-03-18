@@ -7,6 +7,7 @@
 #include <QUrl>
 #include <QWindow>
 
+#include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
 #include "modules/ui/placement/windowplacement.h"
 
@@ -14,56 +15,69 @@ int main( int argc, char **argv )
 {
     int exitCode;
 
-    QGuiApplication app( argc, argv );
-    QQmlApplicationEngine engine;
-    const QUrl mainUrl( QStringLiteral( "qrc:/qml/main.qml" ) );
-    QWindow *mainWindow;
+    crashguard::installTerminateHandler();
 
-    exitCode = 0;
-    mainWindow = nullptr;
+    exitCode = crashguard::runGuardedMain( "vcstream main", [argc, argv]() -> int {
+        int guardedExitCode;
+        int localArgc;
+        char **localArgv;
 
-    QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
-    QCoreApplication::setApplicationName( QStringLiteral( "vcstream" ) );
-    QCoreApplication::setApplicationVersion( QStringLiteral( VCSTREAM_VERSION_STRING ) );
+        localArgc = argc;
+        localArgv = argv;
 
-    AppSupervisor appSupervisor;
+        QGuiApplication app( localArgc, localArgv );
+        QQmlApplicationEngine engine;
+        const QUrl mainUrl( QStringLiteral( "qrc:/qml/main.qml" ) );
+        QWindow *mainWindow;
 
-    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &appSupervisor );
+        guardedExitCode = 0;
+        mainWindow = nullptr;
 
-    QObject::connect( &app, &QCoreApplication::aboutToQuit, &appSupervisor, &AppSupervisor::shutdown );
+        QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
+        QCoreApplication::setApplicationName( QStringLiteral( "vcstream" ) );
+        QCoreApplication::setApplicationVersion( QStringLiteral( VCSTREAM_VERSION_STRING ) );
 
-    QObject::connect(
-        &app,
-        &QCoreApplication::aboutToQuit,
-        &app,
-        [&mainWindow]() {
-            if ( mainWindow != nullptr ) {
-                windowplacement::saveMainWindowPlacement( mainWindow );
-            }
-        } );
+        AppSupervisor appSupervisor;
 
-    QObject::connect(
-        &engine,
-        &QQmlApplicationEngine::objectCreated,
-        &app,
-        [&mainWindow, mainUrl]( QObject *obj, const QUrl &objUrl ) {
-            if ( !obj && ( mainUrl == objUrl ) ) {
-                QCoreApplication::exit( -1 );
-            }
+        engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &appSupervisor );
 
-            if ( obj && ( mainUrl == objUrl ) ) {
-                QWindow *window = qobject_cast<QWindow *>( obj );
-                if ( window ) {
-                    mainWindow = window;
-                    windowplacement::restoreAndRepairMainWindowPlacement( window );
+        QObject::connect( &app, &QCoreApplication::aboutToQuit, &appSupervisor, &AppSupervisor::shutdown );
+
+        QObject::connect(
+            &app,
+            &QCoreApplication::aboutToQuit,
+            &app,
+            [&mainWindow]() {
+                if ( mainWindow != nullptr ) {
+                    windowplacement::saveMainWindowPlacement( mainWindow );
                 }
-            }
-        },
-        Qt::QueuedConnection );
+            } );
 
-    engine.load( mainUrl );
+        QObject::connect(
+            &engine,
+            &QQmlApplicationEngine::objectCreated,
+            &app,
+            [&mainWindow, mainUrl]( QObject *obj, const QUrl &objUrl ) {
+                if ( !obj && ( mainUrl == objUrl ) ) {
+                    QCoreApplication::exit( -1 );
+                }
 
-    exitCode = app.exec();
+                if ( obj && ( mainUrl == objUrl ) ) {
+                    QWindow *window = qobject_cast<QWindow *>( obj );
+                    if ( window ) {
+                        mainWindow = window;
+                        windowplacement::restoreAndRepairMainWindowPlacement( window );
+                    }
+                }
+            },
+            Qt::QueuedConnection );
+
+        engine.load( mainUrl );
+
+        guardedExitCode = app.exec();
+
+        return guardedExitCode;
+    } );
 
     return exitCode;
 }

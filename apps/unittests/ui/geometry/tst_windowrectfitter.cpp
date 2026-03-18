@@ -1,10 +1,12 @@
 #include <QtTest/QTest>
 
+#include <QCoreApplication>
 #include <QObject>
 #include <QRect>
 #include <QSize>
 #include <QVector>
 
+#include "modules/app/defence/crashguard.h"
 #include "modules/ui/geometry/windowrectfitter.h"
 
 class tst_WindowRectFitter : public QObject
@@ -90,6 +92,26 @@ void tst_WindowRectFitter::fit_degraded_keepsTopEdgeVisible()
     QCOMPARE( r.rect.x(), 0 );
 }
 
-QTEST_MAIN( tst_WindowRectFitter )
+int main( int argc, char **argv )
+{
+    int exitCode;
+
+    crashguard::installTerminateHandler();
+
+    exitCode = crashguard::runGuardedMain( "tst_windowrectfitter main", [argc, argv]() -> int {
+        int localArgc;
+        char **localArgv;
+
+        localArgc = argc;
+        localArgv = argv;
+
+        QCoreApplication app( localArgc, localArgv );
+        tst_WindowRectFitter tc;
+        const int result = QTest::qExec( &tc, localArgc, localArgv );
+        return result;
+    } );
+
+    return exitCode;
+}
 
 #include "tst_windowrectfitter.moc"

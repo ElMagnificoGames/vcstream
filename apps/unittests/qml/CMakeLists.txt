@@ -10,6 +10,7 @@ target_link_libraries( tst_qml_ui PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Test
+    vcstream_app_defence
     vcstream_app_lifecycle
     vcstream_ui_placement
 )

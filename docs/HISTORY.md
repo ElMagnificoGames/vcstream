@@ -183,3 +183,50 @@
 - Settings documentation:
   - `docs/SETTINGS.md`
   - `docs/BUILD.md`
+
+## Task 1.3a — Add top-of-stack exception guards (defensive programming)
+
+### What
+
+- Added a small defensive crash-guard module that provides:
+  - a last-resort catch-all wrapper for program entry points
+  - a last-resort catch-all wrapper for explicitly created worker-thread entry points (policy chosen by the thread creation site)
+  - a `std::terminate` handler that logs a best-effort fatal message
+- Wired the guard into the main application entry point and the QML UI smoke test runner.
+- Added unit tests that verify the guarded runner catches and converts exceptions into a defined non-zero exit code.
+- Updated `docs/CODE-QT6.md` to mandate this guard policy in a project-agnostic way.
+
+### Why
+
+- This codebase uses a no-`throw` policy, but exceptions may still arise indirectly (allocation failures, third-party boundaries, unexpected Qt/standard library behaviour).
+- If a failure escapes the intended boundary, a top-of-stack guard provides a last line of defence:
+  - produce a useful log message
+  - attempt to exit gracefully when possible
+  - avoid silent termination or hard-to-debug aborts without context
+
+### Acceptance criteria
+
+- App and test executables have a top-level catch-all guard at their entry points.
+- A `std::terminate` handler exists to log truly unhandled failures.
+- The policy is documented in `docs/CODE-QT6.md` so future changes keep the guard in place.
+- Unit tests demonstrate that the guard converts exceptions into a defined failure result.
+
+### Decisions
+
+- Worker-thread unhandled-exception response is chosen case-by-case at the thread creation site (stop thread vs request whole-app exit).
+- Crash-path logging is best-effort and low-allocation (stderr + Qt critical log).
+
+### Technical notes
+
+- Crash guard module:
+  - `modules/app/defence/crashguard.h`
+  - `modules/app/defence/crashguard.cpp`
+  - `modules/app/defence/crashguard-dd.txt`
+- Entry point wiring:
+  - `apps/vcstream/main.cpp`
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+- Tests:
+  - `apps/unittests/app/defence/tst_crashguard.cpp`
+  - `apps/unittests/app/defence/CMakeLists.txt`
+- Policy update:
+  - `docs/CODE-QT6.md`

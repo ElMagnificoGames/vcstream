@@ -6,6 +6,7 @@ add_executable( vcstream
 target_link_libraries( vcstream PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
+    vcstream_app_defence
     vcstream_app_lifecycle
     vcstream_ui_geometry
     vcstream_ui_placement

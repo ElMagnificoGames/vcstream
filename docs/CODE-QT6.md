@@ -936,45 +936,60 @@ WHY: most error-handling bugs are cleanup and partial-state bugs. A predictable 
 
 ### 10.6 Exceptions policy (MUST)
 
-Toolchain:
+#### 10.6.1 Toolchain (MUST)
 
 - Exceptions are enabled.
 
-House policy:
+#### 10.6.2 House policy (MUST)
 
 - Project code MUST NOT use explicit `throw`.
 - No exception is allowed to escape a module boundary or a Qt boundary.
 - Any call into potentially-throwing third-party code MUST catch exceptions at the lowest practical boundary and translate to the module's normal error/result convention.
 
+#### 10.6.3 Identify potentially-throwing boundaries (MUST)
+
 - Treat these as potentially-throwing boundaries and guard them accordingly:
-  - third-party libraries,
-  - QtConcurrent/QFuture retrieval points (Qt can transfer and rethrow exceptions in some facilities).
+  - third-party libraries
+  - QtConcurrent/QFuture retrieval points (Qt can transfer and rethrow exceptions in some facilities)
 
 - Treat any operation that may allocate (directly or transitively) as potentially throwing, unless it is explicitly non-throwing and documented.
 
 Common potentially-throwing operations include:
 
-- `new` (and any code path that may allocate),
-- Qt containers/strings and conversions that may allocate,
-- standard library containers/strings/algorithms that may allocate.
+- `new` (and any code path that may allocate)
+- Qt containers/strings and conversions that may allocate
+- standard library containers/strings/algorithms that may allocate
 
 Explicitly non-throwing allocation patterns (MAY; MUST be used deliberately):
 
-- `new ( std::nothrow )` with explicit null handling,
-- `malloc`/`calloc`/`realloc` with explicit null handling.
+- `new ( std::nothrow )` with explicit null handling
+- `malloc`/`calloc`/`realloc` with explicit null handling
   - Do not mix allocation families: `malloc`/`free` memory MUST NOT be managed with `delete`, and `new` memory MUST NOT be released with `free`.
   - These APIs SHOULD be used only in low-level boundary/adaptor code (C interop, raw byte buffers, allocator/pool implementations), not as a general allocation style.
-- project/third-party allocators that return status/null instead of throwing.
+- project/third-party allocators that return status/null instead of throwing
 
-- Program entry points (e.g. `main`, worker thread entry functions) SHOULD have a last-resort `catch ( ... )` that logs and terminates cleanly.
+#### 10.6.4 Defensive top-of-stack guards (MUST)
 
-Translation requirements (MUST):
+- Every program entry point (`main`) MUST have a last-resort catch-all guard that logs and attempts to exit gracefully.
+- Every explicitly created thread entry point MUST have a last-resort catch-all guard.
+  - The thread creation site MUST choose an explicit policy for what happens on an unhandled exception:
+    - stop only the affected thread, or
+    - request whole-application shutdown.
+
+- A `std::terminate` handler SHOULD be installed early so that truly unhandled failures still produce a useful log.
+
+Notes:
+
+- This guard is defensive programming: it is not a normal control-flow mechanism.
+- The guard path MUST be best-effort and low-allocation. Prefer logging with minimal formatting and then exiting.
+
+#### 10.6.5 Catch/translate requirements (MUST)
 
 - Catch specific exception types first when useful, then `catch ( ... )`.
 - Log/report with local context.
 - Return a defined failure result.
 
-Canonical translation wrapper (SHOULD):
+#### 10.6.6 Canonical translation wrapper (SHOULD)
 
 Provide a single helper in each boundary layer to keep catch/translate code uniform.
 
@@ -1186,6 +1201,7 @@ WHY: contextless connections make lifetime management implicit and are a frequen
 
 - Prefer the "worker object moved to a thread" pattern (`QObject` worker + `moveToThread`) over subclassing `QThread`.
 - Thread entry points MUST catch and translate any third-party exceptions (Section 10.6).
+- Thread entry points MUST also have a last-resort catch-all guard (Section 10.6.4).
 
 WHY: the worker-object pattern composes better with signals/slots and keeps thread-affinity explicit.
 

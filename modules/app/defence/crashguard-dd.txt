@@ -1,0 +1,47 @@
+= CrashGuard
+
+== Description
+
+I am a last-resort exception guard for thread entry points.
+I collaborate with Qt's application and message logging facilities.
+I do not attempt to make exception-based control flow acceptable; exceptions remain forbidden as a normal mechanism in this codebase.
+I do not guarantee recovery after an unhandled exception; I aim to leave a useful log and to request a graceful shutdown when configured to do so.
+
+State model:
+- Thread affinity: callable from any thread.
+- Lifetime/ownership: stateless; functions are safe to call at program startup and during shutdown.
+- Re-entrancy: functions are re-entrant; logging is best-effort.
+
+== Public interface
+
+Functions:
+- `void crashguard::installTerminateHandler() noexcept`
+  - Installs a `std::terminate` handler that logs a best-effort fatal message and aborts.
+  - Thread safety: call once early; repeated calls replace the handler.
+
+- `template <typename Fn> int crashguard::runGuardedMain( const char *context, Fn &&fn ) noexcept`
+  - Runs `fn()` under a catch-all guard.
+  - On exception, logs both a plain-language reason and technical details, and returns a non-zero exit code.
+  - Intended for `main()`.
+
+- `template <typename Fn> void crashguard::runGuardedThread( const char *threadName, UnhandledExceptionPolicy policy, Fn &&fn ) noexcept`
+  - Runs `fn()` under a catch-all guard.
+  - On exception, logs both a plain-language reason and technical details.
+  - If `policy` is `RequestAppExit`, calls `crashguard::requestAppExit( 1 )`.
+  - Intended for worker thread entry points.
+
+- `void crashguard::requestAppExit( int exitCode ) noexcept`
+  - Requests a Qt application exit if a `QCoreApplication` instance exists.
+  - If no Qt application exists yet, it does nothing.
+
+== Implementation details
+
+- Logging is best-effort and designed to be low-allocation:
+  - build a single bounded multi-line message in a stack buffer
+  - write the complete message to `stderr` first
+  - then emit the same message via a single `qCritical()` call
+- In `std::terminate` paths, `abort()` is used because program state is undefined.
+
+== Requirements
+- Language: C++17.
+- Qt: 6.x (QtCore).
