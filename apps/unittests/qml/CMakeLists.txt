@@ -11,6 +11,7 @@ target_link_libraries( tst_qml_ui PRIVATE
     Qt6::QuickControls2
     Qt6::Test
     vcstream_app_lifecycle
+    vcstream_ui_placement
 )
 
 add_test( NAME tst_qml_ui COMMAND tst_qml_ui )

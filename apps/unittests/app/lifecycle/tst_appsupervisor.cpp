@@ -1,6 +1,7 @@
 #include <QtTest/QTest>
 
 #include <QCoreApplication>
+#include <QObject>
 #include <QSignalSpy>
 
 #include "modules/app/lifecycle/appsupervisor.h"

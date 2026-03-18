@@ -6,6 +6,8 @@ Item {
     id: root
     objectName: "shellPage"
 
+    property var uiMetrics
+
     SystemPalette {
         id: pal
     }
@@ -130,7 +132,7 @@ Item {
 
             Pane {
                 SplitView.preferredWidth: 260
-                SplitView.minimumWidth: 220
+                SplitView.minimumWidth: ( uiMetrics ? uiMetrics.shellLeftPaneMinWidth : 220 )
                 padding: 10
 
                 ColumnLayout {
@@ -254,7 +256,7 @@ Item {
 
             Pane {
                 SplitView.preferredWidth: 520
-                SplitView.minimumWidth: 320
+                SplitView.minimumWidth: ( uiMetrics ? uiMetrics.shellCentrePaneMinWidth : 320 )
                 padding: 10
 
                 Frame {
@@ -419,7 +421,7 @@ Item {
 
             Pane {
                 SplitView.preferredWidth: 320
-                SplitView.minimumWidth: 260
+                SplitView.minimumWidth: ( uiMetrics ? uiMetrics.shellRightPaneMinWidth : 260 )
                 padding: 10
 
                 ColumnLayout {

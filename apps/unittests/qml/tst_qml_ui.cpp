@@ -1,23 +1,34 @@
 #include <QtTest/QTest>
 
+#include <QCoreApplication>
 #include <QGuiApplication>
+#include <QObject>
+#include <QPoint>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
 #include <QLatin1Char>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QRect>
+#include <QScopedPointer>
+#include <QScreen>
+#include <QSettings>
+#include <QSize>
+#include <QTemporaryDir>
 #include <QVector>
 #include <QString>
 #include <QUrl>
 #include <QtGlobal>
 
 #include "modules/app/lifecycle/appsupervisor.h"
+#include "modules/ui/placement/windowplacement.h"
 
 namespace {
 
 QVector<QString> g_messages;
 QtMessageHandler g_previousHandler;
+QScopedPointer<QTemporaryDir> g_settingsDir;
 
 QString formatMessage( const QtMsgType type, const QMessageLogContext &context, const QString &message )
 {
@@ -61,23 +72,27 @@ void clearMessages()
 
 QQuickItem *findItemByObjectNameRecursive( QQuickItem *rootItem, const QString &name )
 {
-    if ( rootItem == nullptr ) {
-        return nullptr;
-    }
+    QQuickItem *out;
 
-    if ( rootItem->objectName() == name ) {
-        return rootItem;
-    }
+    out = nullptr;
 
-    const QList<QQuickItem *> children = rootItem->childItems();
-    for ( QQuickItem *child : children ) {
-        QQuickItem *found = findItemByObjectNameRecursive( child, name );
-        if ( found != nullptr ) {
-            return found;
+    if ( rootItem != nullptr ) {
+        if ( rootItem->objectName() == name ) {
+            out = rootItem;
+        } else {
+            const QList<QQuickItem *> children = rootItem->childItems();
+            for ( QQuickItem *child : children ) {
+                if ( out == nullptr ) {
+                    QQuickItem *found = findItemByObjectNameRecursive( child, name );
+                    if ( found != nullptr ) {
+                        out = found;
+                    }
+                }
+            }
         }
     }
 
-    return nullptr;
+    return out;
 }
 
 void clickItemCenter( QQuickWindow &window, QQuickItem *item )
@@ -119,15 +134,13 @@ void verifyScenePositionUnchanged( QQuickItem *item, const QPointF &before, cons
 
 void failIfAnyWarnings( const char *step )
 {
-    if ( g_messages.isEmpty() ) {
-        return;
+    if ( !g_messages.isEmpty() ) {
+        const QString message =
+            QStringLiteral( "step=%1\n" ).arg( QString::fromLatin1( step ) )
+            + joinedMessages();
+
+        QFAIL( qPrintable( message ) );
     }
-
-    const QString message =
-        QStringLiteral( "step=%1\n" ).arg( QString::fromLatin1( step ) )
-        + joinedMessages();
-
-    QFAIL( qPrintable( message ) );
 }
 
 }
@@ -145,12 +158,28 @@ private Q_SLOTS:
 void tst_QmlUi::initTestCase()
 {
     g_previousHandler = qInstallMessageHandler( messageHandler );
+
+    g_settingsDir.reset( new QTemporaryDir() );
+    QVERIFY( g_settingsDir->isValid() );
+
+    QCoreApplication::setOrganizationName( QStringLiteral( "vcstream-tests" ) );
+    QCoreApplication::setApplicationName( QStringLiteral( "tst_qml_ui" ) );
+
+    QSettings::setDefaultFormat( QSettings::IniFormat );
+    QSettings::setPath( QSettings::IniFormat, QSettings::UserScope, g_settingsDir->path() );
+
+    {
+        QSettings settings;
+        settings.clear();
+        settings.sync();
+    }
 }
 
 void tst_QmlUi::cleanupTestCase()
 {
     qInstallMessageHandler( g_previousHandler );
     g_previousHandler = nullptr;
+    g_settingsDir.reset();
 }
 
 void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
@@ -173,13 +202,101 @@ void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
 
     QCOMPARE( engine.rootObjects().size(), 1 );
 
-    QQuickWindow *window = qobject_cast<QQuickWindow *>( engine.rootObjects().first() );
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
     QVERIFY( window != nullptr );
 
     QVERIFY( QTest::qWaitForWindowExposed( window ) );
     QTest::qWait( 50 );
     failIfAnyWarnings( "post-load" );
     clearMessages();
+
+    {
+        QSettings settings;
+        settings.clear();
+        settings.sync();
+
+        QScreen *screen = window->screen();
+        if ( screen == nullptr ) {
+            screen = QGuiApplication::primaryScreen();
+        }
+
+        if ( screen != nullptr ) {
+            const QRect avail = screen->availableGeometry();
+            const QSize minSize = window->minimumSize();
+
+            QVERIFY( window->y() >= avail.y() );
+
+            if ( minSize.width() <= avail.width() && minSize.height() <= avail.height() ) {
+                window->resize( minSize );
+                QCoreApplication::processEvents();
+
+                windowplacement::restoreAndRepairMainWindowPlacement( window );
+                QCoreApplication::processEvents();
+
+                const int expectedX = avail.x() + ( avail.width() - window->width() ) / 2;
+                const int expectedY = avail.y() + ( avail.height() - window->height() ) / 2;
+                const int tolerance = 4;
+
+                {
+                    const int actualX = window->x();
+                    const QString message =
+                        QStringLiteral( "centre-x mismatch: avail=(%1,%2 %3x%4) win=(%5,%6 %7x%8) expectedX=%9 actualX=%10" )
+                            .arg( avail.x() )
+                            .arg( avail.y() )
+                            .arg( avail.width() )
+                            .arg( avail.height() )
+                            .arg( window->x() )
+                            .arg( window->y() )
+                            .arg( window->width() )
+                            .arg( window->height() )
+                            .arg( expectedX )
+                            .arg( actualX );
+                    QVERIFY2( qAbs( actualX - expectedX ) <= tolerance, qPrintable( message ) );
+                }
+
+                {
+                    const int actualY = window->y();
+                    const QString message =
+                        QStringLiteral( "centre-y mismatch: avail=(%1,%2 %3x%4) win=(%5,%6 %7x%8) expectedY=%9 actualY=%10" )
+                            .arg( avail.x() )
+                            .arg( avail.y() )
+                            .arg( avail.width() )
+                            .arg( avail.height() )
+                            .arg( window->x() )
+                            .arg( window->y() )
+                            .arg( window->width() )
+                            .arg( window->height() )
+                            .arg( expectedY )
+                            .arg( actualY );
+                    QVERIFY2( qAbs( actualY - expectedY ) <= tolerance, qPrintable( message ) );
+                }
+            }
+        }
+    }
+
+
+
+    {
+        QObject *metrics = rootObject->findChild<QObject *>( QStringLiteral( "uiMetrics" ) );
+        QVERIFY2( metrics != nullptr, "uiMetrics" );
+
+        const int minWidthExpected = metrics->property( "minimumWindowWidth" ).toInt();
+        const int minHeightExpected = metrics->property( "minimumWindowHeight" ).toInt();
+        QVERIFY( minWidthExpected > 0 );
+        QVERIFY( minHeightExpected > 0 );
+
+        QCOMPARE( window->minimumWidth(), minWidthExpected );
+        QCOMPARE( window->minimumHeight(), minHeightExpected );
+
+        window->setWidth( minWidthExpected - 1 );
+        QCoreApplication::processEvents();
+        QTRY_VERIFY_WITH_TIMEOUT( window->width() >= minWidthExpected, 1000 );
+
+        window->setHeight( minHeightExpected - 1 );
+        QCoreApplication::processEvents();
+        QTRY_VERIFY_WITH_TIMEOUT( window->height() >= minHeightExpected, 1000 );
+    }
 
     QQuickItem *rootItem = window->contentItem();
     QVERIFY( rootItem != nullptr );

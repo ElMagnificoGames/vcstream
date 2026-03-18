@@ -29,12 +29,10 @@ bool AppSupervisor::joinRoomEnabled() const
 
 void AppSupervisor::setJoinRoomEnabled( const bool enabled )
 {
-    if ( m_joinRoomEnabled == enabled ) {
-        return;
+    if ( m_joinRoomEnabled != enabled ) {
+        m_joinRoomEnabled = enabled;
+        Q_EMIT joinRoomEnabledChanged();
     }
-
-    m_joinRoomEnabled = enabled;
-    Q_EMIT joinRoomEnabledChanged();
 }
 
 bool AppSupervisor::hostRoomEnabled() const
@@ -44,10 +42,8 @@ bool AppSupervisor::hostRoomEnabled() const
 
 void AppSupervisor::setHostRoomEnabled( const bool enabled )
 {
-    if ( m_hostRoomEnabled == enabled ) {
-        return;
+    if ( m_hostRoomEnabled != enabled ) {
+        m_hostRoomEnabled = enabled;
+        Q_EMIT hostRoomEnabledChanged();
     }
-
-    m_hostRoomEnabled = enabled;
-    Q_EMIT hostRoomEnabledChanged();
 }

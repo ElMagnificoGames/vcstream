@@ -651,9 +651,9 @@ WHY: `windows.h` is macro-heavy and can break code in non-obvious ways (e.g. `mi
 
 WHY: it keeps dependencies explicit and prevents include-path accidents.
 
-### 6.2 Header hygiene (MUST)
+### 6.2 Include hygiene (MUST)
 
-- Headers MUST include what they use; do not rely on include order in consumers.
+- All C++ files (e.g. `.h`, `.cpp`) MUST include what they use; do not rely on transitive includes or include order.
 - Every project header MUST have an include guard.
 - `#pragma once` MAY be used in addition to an include guard, but MUST NOT replace it.
 

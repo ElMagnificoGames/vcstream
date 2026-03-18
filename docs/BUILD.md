@@ -41,3 +41,7 @@ The binary is written to `build/bin/`.
 ```sh
 ./build/bin/vcstream
 ```
+
+## Settings
+
+Settings persistence notes (including storage location) are documented in `docs/SETTINGS.md`.

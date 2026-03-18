@@ -1,0 +1,46 @@
+= WindowRectFitter
+
+== Description
+
+I am a window-rectangle fitter.
+I take a desired top-level window rectangle and an allowed screen region (a union of rectangles) and I return a rectangle that fits.
+
+I collaborate with UI code that restores/persists window placement and with unit tests that exercise multi-monitor edge cases.
+I do not create windows, query the OS for screens, or store settings.
+
+State model:
+- Thread affinity: any thread (pure computation).
+- Lifetime/ownership: pure functions; no owned state.
+- Re-entrancy: re-entrant.
+
+== Public interface
+
+- `FitResult fit( const QRect &desired, const QVector<QRect> &allowedRects, const QSize &minimumSize, int titleBarHeight, int titleBarGripWidth )`
+  returns a repaired window rectangle.
+
+Arguments:
+- `desired` is the requested window rectangle in global coordinates.
+- `allowedRects` describes the allowed screen region as a set of rectangles (typically per-screen `availableGeometry()`).
+- `minimumSize` is the minimum allowed window size; the fitter never returns a smaller size.
+- `titleBarHeight` and `titleBarGripWidth` are used only in the degraded case where the minimum size cannot fully fit on screen.
+
+Ownership:
+- No ownership transfer; returned value is by value.
+
+Thread safety:
+- Thread-safe: Yes.
+- Re-entrant: Yes.
+
+Errors:
+- This module has no failure return; if the allowed region is empty it returns a safe fallback rectangle at (0,0).
+
+== Implementation details
+
+- Normal case: if the desired size can be made fully contained in the allowed region by translation only, the fitter chooses the placement that minimises movement from `desired`.
+- Resize case: if translation-only is impossible, the fitter searches for the largest fully-contained size between `desired` and `minimumSize`.
+- Degraded case: if even `minimumSize` cannot be fully contained, the fitter keeps `minimumSize` and chooses a best-effort placement that prioritises top-edge visibility.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.

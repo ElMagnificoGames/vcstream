@@ -135,3 +135,51 @@
 - Documentation updates:
   - UI copy guideline: `AGENTS.md`, `docs/ROADMAP.md`.
   - Rename to Browser Export: `docs/OVERVIEW.md`, `docs/ROADMAP.md`.
+
+## Task 1.3 — Add settings persistence skeleton
+
+### What
+
+- Added a first settings persistence path using Qt `QSettings`.
+- Persisted main window placement (x/y/width/height) and restored it on startup.
+- Repaired restored window placement against the current multi-monitor layout so the window does not disappear off-screen, whilst never shrinking below the UI minimum size.
+- Made the minimum window size explicit in QML and added a test that attempts to resize below the minimum to ensure it is actually enforced.
+- Added a pure geometry fitter (`WindowRectFitter`) with unit tests covering common multi-monitor edge cases.
+- Updated unit tests and QML UI smoke tests to use an isolated temporary `QSettings` location so test runs do not depend on or pollute real user settings.
+- Documented the settings mechanism and storage location.
+
+### Why
+
+- The roadmap needs a concrete place to persist user configuration before networking/capture settings arrive.
+- Persisting the main window size is a low-risk, user-visible setting that exercises the end-to-end persistence path without locking in higher-level UX decisions (such as auto-joining rooms).
+- Hermetic tests reduce flakiness and prevent accidental interactions with developer machines' real settings.
+
+### Acceptance criteria
+
+- App remembers at least one simple setting across restarts (main window placement).
+- Settings storage location is documented.
+- The design leaves space for future device/network/security settings (keys are namespaced under `ui/` for now).
+
+### Decisions
+
+- Persistence mechanism: use Qt `QSettings` as the initial settings backend.
+- Persisted setting chosen: main window placement (not role enablement state) to avoid surprising auto-join/auto-host behaviour.
+
+### Technical notes
+
+- Settings load/save lives in the app entrypoint:
+  - `apps/vcstream/main.cpp`
+- UI minimum size is set in QML:
+  - `apps/vcstream/qml/main.qml`
+  - `apps/vcstream/qml/ShellPage.qml`
+- Test isolation for settings:
+  - `apps/unittests/app/lifecycle/tst_appsupervisor.cpp`
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+- Window placement fitter:
+  - `modules/ui/geometry/windowrectfitter.h`
+  - `modules/ui/geometry/windowrectfitter.cpp`
+  - `modules/ui/geometry/windowrectfitter-dd.txt`
+  - `apps/unittests/ui/geometry/tst_windowrectfitter.cpp`
+- Settings documentation:
+  - `docs/SETTINGS.md`
+  - `docs/BUILD.md`

@@ -6,6 +6,8 @@ Item {
     id: root
     objectName: "landingPage"
 
+    property var uiMetrics
+
     SystemPalette {
         id: pal
     }
