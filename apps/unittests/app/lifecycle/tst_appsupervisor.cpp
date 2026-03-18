@@ -1,0 +1,77 @@
+#include <QtTest/QTest>
+
+#include <QCoreApplication>
+
+#include "modules/app/lifecycle/appsupervisor.h"
+
+#include "apps/unittests/helpers/test_random.h"
+
+class tst_AppSupervisor : public QObject
+{
+    Q_OBJECT
+
+private Q_SLOTS:
+    void appVersion_roundTripsExplicitValues();
+    void appVersion_roundTripsDeterministicRandomAscii();
+    void shutdown_isSafeToCall();
+};
+
+void tst_AppSupervisor::appVersion_roundTripsExplicitValues()
+{
+    AppSupervisor supervisor;
+
+    {
+        const QString applicationVersionTestValue = QString();
+        QCoreApplication::setApplicationVersion( applicationVersionTestValue );
+        QCOMPARE( supervisor.appVersion(), applicationVersionTestValue );
+    }
+
+    {
+        const QString applicationVersionTestValue = QStringLiteral( "test-only-application-version" );
+        QCoreApplication::setApplicationVersion( applicationVersionTestValue );
+        QCOMPARE( supervisor.appVersion(), applicationVersionTestValue );
+    }
+
+    {
+        const QString applicationVersionTestValue( 1024, QLatin1Char( 'x' ) );
+        QCoreApplication::setApplicationVersion( applicationVersionTestValue );
+        QCOMPARE( supervisor.appVersion(), applicationVersionTestValue );
+    }
+}
+
+void tst_AppSupervisor::appVersion_roundTripsDeterministicRandomAscii()
+{
+    const quint32 defaultSeed = 0xC0FFEEu;
+    const quint32 seed = testhelpers::seedFromEnvironmentOrDefault( "VCSTREAM_TEST_SEED", defaultSeed );
+    QRandomGenerator rng( seed );
+    AppSupervisor supervisor;
+    const int cases = 25;
+
+    for ( int i = 0; i < cases; ++i ) {
+        const QString applicationVersionTestValue = testhelpers::randomAsciiString( rng, 0, 64 );
+        QCoreApplication::setApplicationVersion( applicationVersionTestValue );
+        const QString actualVersion = supervisor.appVersion();
+
+        if ( actualVersion != applicationVersionTestValue ) {
+            const QString message =
+                QStringLiteral( "Mismatch: VCSTREAM_TEST_SEED=%1 case=%2 expected='%3' actual='%4'" )
+                    .arg( seed )
+                    .arg( i )
+                    .arg( applicationVersionTestValue )
+                    .arg( actualVersion );
+
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+void tst_AppSupervisor::shutdown_isSafeToCall()
+{
+    AppSupervisor supervisor;
+
+    supervisor.shutdown();
+}
+
+QTEST_MAIN( tst_AppSupervisor )
+
+#include "tst_appsupervisor.moc"

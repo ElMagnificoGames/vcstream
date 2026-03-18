@@ -7,6 +7,7 @@ This repository uses CMake.
 - CMake
 - A C++17 compiler
 - Qt 6 development packages (Qt Quick)
+- Qt 6 development packages (Qt Quick Controls 2)
 
 ## Configure
 

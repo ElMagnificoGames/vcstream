@@ -1,0 +1,52 @@
+= <ModuleName>
+
+== Description
+
+I am <what this module/type is>.
+I <what I do, at a high level>.
+
+I collaborate with <other modules/types>.
+I do not <explicit non-goals>.
+
+State model:
+- Thread affinity: <UI thread / any thread / dedicated worker thread / etc>.
+- Lifetime/ownership: <who creates/owns me; when I am destroyed>.
+- Re-entrancy: <re-entrant / not re-entrant; how callers must serialise>.
+
+== Public interface
+
+<Manpage-like contract for public API. Prefer this structure where applicable.>
+
+- `<Return> <name>( <args> )` <what it does>.
+
+Arguments:
+- `<arg>` <rules: nullability, valid ranges, encoding expectations>.
+
+Ownership:
+- <who owns returned objects; who deletes/frees; parent ownership for QObjects>.
+
+Lifetime:
+- <how long returned views/pointers remain valid; what invalidates them>.
+
+Thread safety:
+- Thread-safe: Yes/No.
+- Re-entrant: Yes/No.
+- Notes: <what must be synchronised; thread-affinity expectations>.
+
+Errors:
+- <how failure is reported; whether out-params are modified on failure>.
+- <logging/diagnostics expectations, if applicable>.
+
+== Implementation details
+
+<Algorithms, invariants, tricky edge cases, proofs/derivations where relevant.>
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.
+
+Optional (include if applicable):
+- Platform-specific implementations: Windows and Linux.
+- Third-party libraries: <names and minimum versions>.
+- Runtime assumptions: <threading model, event loop assumptions, etc>.

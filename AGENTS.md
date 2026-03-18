@@ -1,9 +1,10 @@
-# Claude Code Instructions
+# Agent Instructions
 
 ## Additional Context
 
 - `docs/BUILD.md` provides build and run instructions.
 - `docs/CODE-QT6.md` provides all coding conventions and a great deal of the AI-operation policies for working with this codebase.  This is **MANDATORY** reading.
+- `docs/DD-TEMPLATE.txt` provides the starting template for module DD files (`*-dd.txt`).
 - `docs/HISTORY.md` provides a description of what work has been completed so far.
 - `docs/MODULES.md` defines the initial module boundaries and dependency direction.
 - `docs/OVERVIEW.md` provides onboarding information to understand this project and its goals.
@@ -12,6 +13,8 @@
 ## Tooling
 
 This repository uses CMake.
+
+Unit tests use QtTest and live under `apps/unittests/`. Shared unit test helper utilities live under `apps/unittests/helpers/`.
 
 Canonical build and run instructions live in `docs/BUILD.md`.
 
@@ -85,3 +88,17 @@ The version is project-wide; all executables in this repository share the same v
 Versioning should be prospective:  if a a given task begins the process of implementing a new feature, that warrants a minor number increment, even if taken on its own the patch barely does anything.
 
 Increment the version **once per task**, not once per individual change.  If the version has already been bumped for the current task, do not bump it again for subsequent changes within the same task.
+
+## Documentation
+
+### DD files
+
+When adding or editing any module DD file (`*-dd.txt`), follow this checklist.
+
+- Description MUST use Smalltalk class-comment voice:
+  - start with "I am ..."
+  - include "I collaborate with ..."
+  - include explicit non-goals as "I do not ..."
+  - include a "State model" section (thread affinity, lifetime/ownership expectations, and re-entrancy where relevant)
+- Use the DD template in `docs/DD-TEMPLATE.txt` as the starting point.
+- Keep the Public interface section contract-like (arguments, ownership, lifetime, thread safety, errors).

@@ -1070,9 +1070,11 @@ WHY: shared ownership obscures lifetimes and creates shutdown-order bugs.
 - Prefer designs that do not need to allocate during steady-state operation.
 - If a module needs working buffers, allocate them during initialisation and reuse them.
 - Allocation in a documented hot path MUST be justified in the DD file.
-
 - If a module may be used by multiple threads, shared buffers MUST be designed to avoid data races and SHOULD avoid high contention.
   - Prefer per-instance or per-thread buffers.
+
+For example:
+- When building `QString`/`QByteArray` values in loops, prefer a single allocation (`resize` + indexed fill) over incremental growth (e.g. repeated `append()`).
 
 WHY: allocations can fail and can introduce synchronisation, fragmentation, and cache/page-fault costs.
 
@@ -1204,6 +1206,17 @@ WHY: Qt handles Unicode paths correctly across Windows/Linux and provides consis
 - If you call potentially-throwing code from a slot/callback, catch and translate inside the slot/callback.
 
 WHY: exceptions unwinding through Qt is not a supported control-flow model and commonly ends in termination or corruption.
+
+### 12.9 Qt Quick (QML) / C++ boundary guideline (SHOULD)
+
+For applications that use Qt Quick (QML) with C++ back-end code, prefer a strict boundary:
+
+- QML owns presentation: layout, control ordering, styling, animations, and user-visible copy.
+- C++ owns state and services: networking, capture, persistence, and other fallible/long-running work.
+- QML should not perform IO or embed business logic; it should bind to C++ properties/models and invoke explicit commands.
+- C++ should not encode UI layout/styling policy; instead expose the smallest useful surface (properties, signals, invokable commands, and list models).
+
+WHY: this keeps UI iteration fast (QML-only edits for layout/styling) whilst keeping stateful and fallible work testable and reviewable in C++.
 
 ## 13) Unit tests (QtTest)
 

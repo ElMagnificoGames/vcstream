@@ -240,7 +240,16 @@ High-level rules:
 - Service modules depend on `SharedTypes` and on each other only through narrow, intentional interfaces.
 - `Diagnostics` is a sink: everyone may report to it, but it should not depend on other feature modules.
 
-Initial allowed dependencies (first pass):
+### QML/C++ boundary rule
+
+This repository uses QML for presentation and C++ for application state and services.
+
+- QML owns layout, control ordering, styling, copy text, and animations.
+- C++ owns state, persistence, and service lifecycles (capture/network/render/HTTP).
+- QML should not perform IO or implement business logic; it should bind to C++ properties/models and invoke explicit commands.
+- C++ should not encode UI layout policy (pixel coordinates, widget ordering, or styling); it should expose the smallest useful surface for the UI.
+
+### Initial allowed dependencies (first pass)
 
 - All modules -> `SharedTypes` (shared types and identifiers)
 - `AppSupervisor` -> `RoomSession`, `RelayServer`, `SourceCatalogue`, `MediaCapture`, `MusicPlaylistSource`, `AudioGraph`, `VideoGraph`, `VideoRenderer`, `TextChat`, `HttpMediaServer`, `Diagnostics`
@@ -254,7 +263,7 @@ Initial allowed dependencies (first pass):
 - `HttpMediaServer` -> `SourceCatalogue`, `AudioGraph`, `VideoGraph`, `Diagnostics`
 - `RendezvousClient` -> `RoomSession`, `Diagnostics`
 
-Explicitly forbidden dependencies (to keep boundaries real):
+### Explicitly forbidden dependencies (to keep boundaries real)
 
 - UI -> `RelayServer` / `MediaCapture` / `AudioGraph` / `VideoGraph` / `VideoRenderer` / `HttpMediaServer` (go through `AppSupervisor`)
 - `RelayServer` -> UI / `HttpMediaServer`

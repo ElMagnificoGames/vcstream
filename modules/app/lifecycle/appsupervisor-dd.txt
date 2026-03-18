@@ -1,0 +1,35 @@
+= AppSupervisor
+
+== Description
+
+I am the top-level application supervisor.
+I own startup and shutdown wiring and I provide the primary C++ surface presented to QML.
+
+I collaborate with UI-facing adaptors and service modules by owning their lifetimes and wiring them together.
+I do not implement capture, networking, rendering, or HTTP export myself; I orchestrate those services.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime: constructed at program startup and destroyed at process shutdown.
+
+== Public interface
+
+- `QString appVersion() const` returns the application version string.
+- `void shutdown()` performs orderly shutdown of owned services.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+
+Errors:
+- This module currently has no failure paths.
+
+== Implementation details
+
+- `appVersion()` is currently sourced from `QCoreApplication::applicationVersion()`.
+- `shutdown()` is currently a placeholder and will gain real behaviour as services are introduced.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.
