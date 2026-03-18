@@ -135,6 +135,37 @@ Never write for the happy path only.
 - settings storage location is documented
 - design leaves room for future device/network/security settings
 
+### Task 1.4 — Add Preferences UI (settings + local device monitor)
+**Goal:** provide a home for user preferences and a local "what does my machine see?" monitor for debugging.
+
+**Discussion guidance:**
+This should cover:
+- theme/style selection
+- accessibility options (e.g. UI scale, reduce motion)
+- default values (e.g. display name, preferred webcam)
+- a local monitor view that can enumerate and refresh:
+  - cameras, microphones
+  - screens and windows
+  - audio output devices (where supported)
+  - any other locally available inputs/outputs the app can use as sinks/sources
+
+**Completion criteria:**
+- preferences entry point exists in the app shell UI
+- at least one preference is persisted and restored (beyond window placement)
+- device monitor can refresh without restart and does not require "starting capture" to be useful
+- obvious failure paths (device disappears, permission denied) are surfaced without crashing
+
+### Task 1.5 — Add landing-page popups (Scheduling + Support)
+**Goal:** add two small optional buttons on the landing screen, each opening its own popup:
+- scheduling: placeholder copy such as "Need help scheduling?" linking to the schedule coordination tool website
+- support: placeholder copy such as "Support the creator" linking to Twitch and (optionally) a tip jar
+
+**Completion criteria:**
+- landing screen has two buttons, each opening a separate overlay popup (no layout reflow/oscillation)
+- links open externally (platform-default browser)
+- popups are clearly optional and only appear on the landing screen
+- QML UI smoke tests exercise open/close and emit no warnings
+
 ---
 
 ## Phase 2 — Early architecture decisions that affect everything later
@@ -579,6 +610,13 @@ This decision should explicitly consider:
 ### Task 14.2 — Define room-code and password model
 **Goal:** formalise the proposed UX.
 
+**Discussion guidance:**
+Consider a registration-plate-style room code (letters + digits) with a fixed per-position character class so the app can canonicalise lookalike characters on input.
+- input: case-insensitive; ignore separators (spaces/hyphens)
+- canonicalisation: convert lookalikes where the position type is known (e.g. `O` -> `0` in digit positions)
+- alphabet: optionally forbid overly ambiguous glyphs to reduce errors across typefaces
+- display: show the canonical form with grouping for memorability
+
 **Completion criteria:**
 - room code format is specified
 - password handling is specified
@@ -590,7 +628,7 @@ This decision should explicitly consider:
 
 **Completion criteria:**
 - host can publish a room record
-- server assigns a 6-digit room code
+- server assigns a room code in the chosen format
 - joining client can look up the room by code and password
 - no media is relayed by this service
 
