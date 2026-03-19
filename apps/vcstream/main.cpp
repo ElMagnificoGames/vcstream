@@ -3,13 +3,16 @@
 #include <QObject>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QString>
 #include <QUrl>
 #include <QWindow>
 
 #include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
+#include "modules/ui/colour/oklchutil.h"
 #include "modules/ui/placement/windowplacement.h"
+#include "modules/ui/theme/accentimageprovider.h"
 
 int main( int argc, char **argv )
 {
@@ -25,45 +28,45 @@ int main( int argc, char **argv )
         localArgc = argc;
         localArgv = argv;
 
+        QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
+        QCoreApplication::setApplicationName( QStringLiteral( "vcstream" ) );
+
         QGuiApplication app( localArgc, localArgv );
-        QQmlApplicationEngine engine;
         const QUrl mainUrl( QStringLiteral( "qrc:/qml/main.qml" ) );
         QWindow *mainWindow;
 
         guardedExitCode = 0;
         mainWindow = nullptr;
 
-        QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
-        QCoreApplication::setApplicationName( QStringLiteral( "vcstream" ) );
         QCoreApplication::setApplicationVersion( QStringLiteral( VCSTREAM_VERSION_STRING ) );
 
         AppSupervisor appSupervisor;
 
-        engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &appSupervisor );
+        OklchUtil oklchUtil;
+        QQmlApplicationEngine engine;
 
         QObject::connect( &app, &QCoreApplication::aboutToQuit, &appSupervisor, &AppSupervisor::shutdown );
 
-        QObject::connect(
-            &app,
-            &QCoreApplication::aboutToQuit,
-            &app,
-            [&mainWindow]() {
-                if ( mainWindow != nullptr ) {
-                    windowplacement::saveMainWindowPlacement( mainWindow );
-                }
-            } );
+        QObject::connect( &engine, &QQmlApplicationEngine::warnings, &engine, []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                qWarning() << e;
+            }
+        } );
 
-        QObject::connect(
-            &engine,
-            &QQmlApplicationEngine::objectCreated,
-            &app,
+        engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+        engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+        engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &appSupervisor );
+
+        QObject::connect( &engine, &QQmlApplicationEngine::objectCreated, &app,
             [&mainWindow, mainUrl]( QObject *obj, const QUrl &objUrl ) {
                 if ( !obj && ( mainUrl == objUrl ) ) {
                     QCoreApplication::exit( -1 );
                 }
 
                 if ( obj && ( mainUrl == objUrl ) ) {
-                    QWindow *window = qobject_cast<QWindow *>( obj );
+                    QWindow *window;
+
+                    window = qobject_cast<QWindow *>( obj );
                     if ( window ) {
                         mainWindow = window;
                         windowplacement::restoreAndRepairMainWindowPlacement( window );
@@ -71,6 +74,12 @@ int main( int argc, char **argv )
                 }
             },
             Qt::QueuedConnection );
+
+        QObject::connect( &app, &QCoreApplication::aboutToQuit, &app, [&mainWindow]() {
+            if ( mainWindow != nullptr ) {
+                windowplacement::saveMainWindowPlacement( mainWindow );
+            }
+        } );
 
         engine.load( mainUrl );
 

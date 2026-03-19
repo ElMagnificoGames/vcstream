@@ -15,7 +15,9 @@ State model:
 == Public interface
 
 - `QString appVersion() const` returns the application version string.
+
 - `void shutdown()` performs orderly shutdown of owned services.
+  - It currently persists preferences.
 
 - `bool joinRoomEnabled() const` returns whether the local instance is configured to join a room.
 - `void setJoinRoomEnabled( bool enabled )` sets whether the local instance is configured to join a room.
@@ -29,6 +31,18 @@ State model:
   Notes:
   - Setting the property to its current value is a no-op and does not emit a change signal.
 
+- `QObject *preferences() const` returns the application preferences object.
+- `QObject *deviceCatalogue() const` returns the local device catalogue object.
+
+  Ownership:
+  - Returned pointers are owned by `AppSupervisor` (QObject parented to it) and remain valid for the supervisor's lifetime.
+
+- `bool themeIconAvailable( const QString &name ) const` returns whether a named theme icon is available.
+
+Signals:
+- `joinRoomEnabledChanged()` is emitted when `joinRoomEnabled` changes.
+- `hostRoomEnabledChanged()` is emitted when `hostRoomEnabled` changes.
+
 Thread safety:
 - Thread-safe: No.
 - Re-entrant: No.
@@ -40,6 +54,7 @@ Errors:
 
 - `appVersion()` is currently sourced from `QCoreApplication::applicationVersion()`.
 - `shutdown()` is currently a placeholder and will gain real behaviour as services are introduced.
+  It currently persists preferences as part of orderly shutdown.
 
 == Requirements
 

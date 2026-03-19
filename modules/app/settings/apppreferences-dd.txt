@@ -1,0 +1,100 @@
+= AppPreferences
+
+== Description
+
+I am the application preferences store.
+I provide a small QML-facing preferences surface, backed by Qt `QSettings`.
+
+I collaborate with UI code that edits preferences and with UI theme plumbing that translates preferences into an application palette.
+I do not implement UI presentation, I do not manage window placement, and I do not attempt to validate device capabilities.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by `AppSupervisor` for the lifetime of the process.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+Properties:
+- `QString displayName` is the preferred local display name.
+
+- `QString themeMode` selects the theme mode.
+
+  Allowed values (recommended set used by the UI):
+  - `system` follow the active style/system palette
+  - `light` force a light-biased palette
+  - `dark` force a dark-biased palette
+  - `victorian` force the Scholarly Gothic palette
+
+  Defaults:
+  - if missing, defaults to `system`.
+
+  Notes:
+  - The value is persisted as a string; unknown values may be persisted and later returned unchanged.
+
+- `QString accent` selects the accent.
+
+  Allowed values (recommended set used by the UI):
+  - `system` use the style/system highlight colour
+  - `victorian` Scholarly Gothic triad (oxblood/navy/brass)
+  - preset names: `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `pink`, `purple`
+  - `custom` use the OKLCH custom accent triple
+
+  Defaults:
+  - if missing, defaults to `system`.
+
+  Notes:
+  - The value is persisted as a string; unknown values may be persisted and later returned unchanged.
+
+- `double customAccentLightness` is the OKLCH lightness for the custom accent.
+  - Units: [0,1].
+  - Inputs outside [0,1] are clamped.
+
+- `double customAccentChroma` is the OKLCH chroma for the custom accent.
+  - Units: [0,1] (practical sRGB gamut is smaller).
+  - Inputs outside [0,1] are clamped.
+
+- `double customAccentHueDegrees` is the OKLCH hue for the custom accent.
+  - Units: degrees.
+  - The value is wrapped to [0,360).
+
+  Defaults:
+  - `customAccentLightness`: 0.75
+  - `customAccentChroma`: 0.16
+  - `customAccentHueDegrees`: 260.0
+
+Commands:
+- `void reload()` loads preferences from `QSettings` and updates properties.
+- `void save()` persists current property values into `QSettings`.
+
+  Behaviour:
+  - `reload()` reads all known keys and updates properties using the same clamping/wrapping rules as the setters.
+  - `save()` writes all known keys and calls `QSettings::sync()`.
+
+Change notification:
+- Property change signals are emitted only when the stored value actually changes.
+
+Settings keys:
+- `ui/profile/displayName`
+- `ui/theme/mode`
+- `ui/theme/accent`
+- `ui/theme/customAccentLightness`
+- `ui/theme/customAccentChroma`
+- `ui/theme/customAccentHueDegrees`
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+
+Errors:
+- No explicit failure reporting.
+- Invalid or missing settings fall back to defaults.
+
+== Implementation details
+
+- Persistence uses `QSettings` and calls `sync()` to flush updates.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore).

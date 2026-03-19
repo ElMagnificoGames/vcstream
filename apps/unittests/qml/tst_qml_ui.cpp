@@ -1,9 +1,24 @@
 #include <QtTest/QTest>
 
+// QML smoke test policy:
+// - Any Qt/QML warning fails the test.
+// - This test automatically sweeps interactive controls authored under `qrc:/qml/*`:
+//   - hover all interactive controls (covers ToolTip / delayed hover help)
+//   - click most interactive controls
+// - Interactive controls under `qrc:/qml/*` MUST have stable `objectName` values.
+// - If a control is unsafe to auto-click in CI (engine reload, external links, process exit, etc.),
+//   set `property bool testSkipActivate: true` on it; it will still be hovered.
+
 #include <QCoreApplication>
+#include <QColor>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QObject>
+#include <QPalette>
 #include <QPoint>
+#include <cmath>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
@@ -17,13 +32,23 @@
 #include <QSize>
 #include <QTemporaryDir>
 #include <QVector>
+#include <QWheelEvent>
 #include <QString>
 #include <QUrl>
 #include <QtGlobal>
 
+#include <QQmlContext>
+#include <QQmlEngine>
+
+#include <QSet>
+
+#include <algorithm>
+
 #include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
+#include "modules/ui/colour/oklchutil.h"
 #include "modules/ui/placement/windowplacement.h"
+#include "modules/ui/theme/accentimageprovider.h"
 
 namespace {
 
@@ -104,6 +129,43 @@ void clickItemCenter( QQuickWindow &window, QQuickItem *item )
     QTest::mouseClick( &window, Qt::LeftButton, Qt::NoModifier, clickPoint );
 }
 
+void wheelItemCenter( QQuickWindow &window, QQuickItem *item, const int angleDeltaY )
+{
+    const QPointF scenePoint = item->mapToScene( QPointF( item->width() / 2.0, item->height() / 2.0 ) );
+    const QPoint pixelDelta( 0, 0 );
+    const QPoint angleDelta( 0, angleDeltaY );
+    QWheelEvent event(
+        scenePoint,
+        scenePoint,
+        pixelDelta,
+        angleDelta,
+        Qt::NoButton,
+        Qt::NoModifier,
+        Qt::NoScrollPhase,
+        false );
+
+    QCoreApplication::sendEvent( item, &event );
+    QCoreApplication::sendEvent( &window, &event );
+}
+
+void wheelAtItemCenterViaWindow( QQuickWindow &window, QQuickItem *item, const int angleDeltaY )
+{
+    const QPointF scenePoint = item->mapToScene( QPointF( item->width() / 2.0, item->height() / 2.0 ) );
+    const QPoint pixelDelta( 0, 0 );
+    const QPoint angleDelta( 0, angleDeltaY );
+    QWheelEvent event(
+        scenePoint,
+        scenePoint,
+        pixelDelta,
+        angleDelta,
+        Qt::NoButton,
+        Qt::NoModifier,
+        Qt::NoScrollPhase,
+        false );
+
+    QCoreApplication::sendEvent( &window, &event );
+}
+
 void moveMouseToItemCenter( QQuickWindow &window, QQuickItem *item )
 {
     const QPointF scenePoint = item->mapToScene( QPointF( item->width() / 2.0, item->height() / 2.0 ) );
@@ -144,6 +206,823 @@ void failIfAnyWarnings( const char *step )
     }
 }
 
+bool isFromProjectQml( QObject *obj )
+{
+    bool out;
+
+    out = false;
+
+    if ( obj != nullptr ) {
+        const QQmlContext *ctx = QQmlEngine::contextForObject( obj );
+        if ( ctx != nullptr ) {
+            const QUrl baseUrl = ctx->baseUrl();
+            if ( baseUrl.isValid() ) {
+                out = baseUrl.toString().startsWith( QStringLiteral( "qrc:/qml/" ) );
+            }
+        }
+    }
+
+    return out;
+}
+
+bool hasSignal( const QMetaObject *metaObject, const char *signature )
+{
+    bool out;
+
+    out = false;
+
+    if ( metaObject != nullptr ) {
+        out = ( metaObject->indexOfSignal( signature ) >= 0 );
+    }
+
+    return out;
+}
+
+bool isInteractive( QObject *obj )
+{
+    bool out;
+    const QMetaObject *m;
+
+    out = false;
+    m = nullptr;
+
+    if ( obj != nullptr ) {
+        m = obj->metaObject();
+        out =
+            hasSignal( m, "clicked()" )
+            || hasSignal( m, "toggled(bool)" )
+            || hasSignal( m, "activated(int)" )
+            || hasSignal( m, "editingFinished()" );
+    }
+
+    return out;
+}
+
+QRectF sceneRect( QQuickItem *item )
+{
+    if ( item == nullptr ) {
+        return QRectF();
+    }
+
+    const QPointF tl = item->mapToScene( QPointF( 0.0, 0.0 ) );
+    const QPointF br = item->mapToScene( QPointF( item->width(), item->height() ) );
+    return QRectF( tl, br ).normalized();
+}
+
+QRectF scenePaintedTextRect( QQuickItem *textItem )
+{
+    if ( textItem == nullptr ) {
+        return QRectF();
+    }
+
+    const QString className = QString::fromLatin1( textItem->metaObject()->className() );
+    if ( !className.startsWith( QStringLiteral( "QQuickText" ), Qt::CaseSensitive ) ) {
+        return sceneRect( textItem );
+    }
+
+    const qreal paintedW = textItem->property( "paintedWidth" ).toReal();
+    const qreal paintedH = textItem->property( "paintedHeight" ).toReal();
+    if ( paintedW < 2.0 || paintedH < 2.0 ) {
+        return QRectF();
+    }
+
+    const qreal leftPadding = textItem->property( "leftPadding" ).toReal();
+    const qreal rightPadding = textItem->property( "rightPadding" ).toReal();
+    const qreal topPadding = textItem->property( "topPadding" ).toReal();
+    const qreal bottomPadding = textItem->property( "bottomPadding" ).toReal();
+
+    const qreal availableW = std::max( 0.0, textItem->width() - leftPadding - rightPadding );
+    const qreal availableH = std::max( 0.0, textItem->height() - topPadding - bottomPadding );
+
+    const int hAlign = textItem->property( "horizontalAlignment" ).toInt();
+    const int vAlign = textItem->property( "verticalAlignment" ).toInt();
+
+    qreal x = leftPadding;
+    if ( hAlign == Qt::AlignHCenter ) {
+        x = leftPadding + ( availableW - paintedW ) / 2.0;
+    } else if ( hAlign == Qt::AlignRight ) {
+        x = leftPadding + ( availableW - paintedW );
+    }
+
+    qreal y = topPadding;
+    if ( vAlign == Qt::AlignVCenter ) {
+        y = topPadding + ( availableH - paintedH ) / 2.0;
+    } else if ( vAlign == Qt::AlignBottom ) {
+        y = topPadding + ( availableH - paintedH );
+    }
+
+    const QPointF tl = textItem->mapToScene( QPointF( x, y ) );
+    const QPointF br = textItem->mapToScene( QPointF( x + paintedW, y + paintedH ) );
+    return QRectF( tl, br ).normalized();
+}
+
+bool isEffectivelyVisible( QQuickItem *item )
+{
+    if ( item == nullptr ) {
+        return false;
+    }
+    if ( !item->isVisible() ) {
+        return false;
+    }
+    if ( item->opacity() < 0.2 ) {
+        return false;
+    }
+
+    return true;
+}
+
+void collectItemsDepthFirst( QQuickItem *root, QVector<QQuickItem *> &out );
+QVector<QQuickItem *> discoverInteractiveProjectItems( QQuickItem *rootItem );
+QString stableKeyForItem( QQuickItem *item );
+bool itemCentreIsInsideWindow( QQuickWindow &window, QQuickItem *item );
+
+qreal relativeLuminance( const QColor &c )
+{
+    auto toLinear = []( const qreal u ) {
+        if ( u <= 0.03928 ) {
+            return u / 12.92;
+        }
+        return std::pow( ( u + 0.055 ) / 1.055, 2.4 );
+    };
+
+    const qreal r = toLinear( c.redF() );
+    const qreal g = toLinear( c.greenF() );
+    const qreal b = toLinear( c.blueF() );
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+qreal contrastRatio( const QColor &a, const QColor &b )
+{
+    const qreal la = relativeLuminance( a );
+    const qreal lb = relativeLuminance( b );
+    const qreal l1 = std::max( la, lb );
+    const qreal l2 = std::min( la, lb );
+    return ( l1 + 0.05 ) / ( l2 + 0.05 );
+}
+
+QColor findBackgroundColourForItem( QQuickWindow &window, QQuickItem *item )
+{
+    QQuickItem *cur;
+
+    cur = ( item != nullptr ) ? item->parentItem() : nullptr;
+    while ( cur != nullptr ) {
+        const QVariant colourVar = cur->property( "color" );
+        if ( colourVar.isValid() ) {
+            const QColor c = colourVar.value<QColor>();
+            if ( c.isValid() && c.alphaF() > 0.10 ) {
+                return c;
+            }
+        }
+
+        const QVariant surfaceVar = cur->property( "surfaceColour" );
+        if ( surfaceVar.isValid() ) {
+            const QColor c = surfaceVar.value<QColor>();
+            if ( c.isValid() && c.alphaF() > 0.10 ) {
+                return c;
+            }
+        }
+
+        cur = cur->parentItem();
+    }
+
+    return QGuiApplication::palette().color( QPalette::Window );
+}
+
+void verifyReadableTextContrast( QQuickWindow &window, QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+
+        const QString className = QString::fromLatin1( item->metaObject()->className() );
+        if ( !className.startsWith( QStringLiteral( "QQuickText" ), Qt::CaseSensitive ) ) {
+            continue;
+        }
+        if ( !isEffectivelyVisible( item ) ) {
+            continue;
+        }
+
+        const QString text = item->property( "text" ).toString().trimmed();
+        if ( text.isEmpty() ) {
+            continue;
+        }
+
+        const QVariant colourVar = item->property( "color" );
+        if ( !colourVar.isValid() ) {
+            continue;
+        }
+
+        const QColor fg = colourVar.value<QColor>();
+        if ( !fg.isValid() ) {
+            continue;
+        }
+        if ( fg.alphaF() < 0.50 ) {
+            continue;
+        }
+
+        const QColor bg = findBackgroundColourForItem( window, item );
+        if ( !bg.isValid() ) {
+            continue;
+        }
+
+        const qreal ratio = contrastRatio( fg, bg );
+        if ( ratio < 3.0 ) {
+            const QQmlContext *ctx = QQmlEngine::contextForObject( item );
+            const QString baseUrl = ( ctx != nullptr ) ? ctx->baseUrl().toString() : QString();
+
+            const QString message =
+                QStringLiteral( "Low text contrast at %1: ratio=%2 text=%3 baseUrl=%4 objectName=%5" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( ratio, 0, 'f', 2 )
+                    .arg( text )
+                    .arg( baseUrl )
+                    .arg( item->objectName() );
+
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+void verifyInkStrokeContracts( QQuickWindow &window, QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    QVector<QQuickItem *> inkStrokes;
+    QVector<QQuickItem *> closeButtons;
+
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+
+        const QVariant inkVar = item->property( "vcInkStroke" );
+        if ( inkVar.isValid() && inkVar.toBool() ) {
+            inkStrokes.append( item );
+        }
+
+        const QString name = item->objectName();
+        if ( !name.isEmpty() && name.contains( QStringLiteral( "CloseButton" ), Qt::CaseSensitive ) ) {
+            closeButtons.append( item );
+        }
+    }
+
+    for ( QQuickItem *stroke : inkStrokes ) {
+        const QVariant colourVar = stroke->property( "color" );
+        if ( !colourVar.isValid() ) {
+            continue;
+        }
+
+        const QColor fg = colourVar.value<QColor>();
+        if ( !fg.isValid() || fg.alphaF() < 0.80 ) {
+            continue;
+        }
+
+        const QColor bg = findBackgroundColourForItem( window, stroke );
+        const qreal ratio = contrastRatio( fg, bg );
+        if ( ratio < 3.0 ) {
+            const QQmlContext *ctx = QQmlEngine::contextForObject( stroke );
+            const QString baseUrl = ( ctx != nullptr ) ? ctx->baseUrl().toString() : QString();
+
+            const QString message =
+                QStringLiteral( "Low ink-stroke contrast at %1: ratio=%2 baseUrl=%3 objectName=%4" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( ratio, 0, 'f', 2 )
+                    .arg( baseUrl )
+                    .arg( stroke->objectName() );
+            QFAIL( qPrintable( message ) );
+        }
+    }
+
+    for ( QQuickItem *button : closeButtons ) {
+        bool found = false;
+
+        QVector<QQuickItem *> sub;
+        collectItemsDepthFirst( button, sub );
+        for ( QQuickItem *child : sub ) {
+            if ( child == nullptr ) {
+                continue;
+            }
+            const QVariant inkVar = child->property( "vcInkStroke" );
+            if ( inkVar.isValid() && inkVar.toBool() ) {
+                found = true;
+                break;
+            }
+        }
+
+        if ( !found ) {
+            const QQmlContext *ctx = QQmlEngine::contextForObject( button );
+            const QString baseUrl = ( ctx != nullptr ) ? ctx->baseUrl().toString() : QString();
+            const QString message =
+                QStringLiteral( "Close button missing ink-stroke icon at %1: baseUrl=%2 objectName=%3" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( baseUrl )
+                    .arg( button->objectName() );
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+void verifyInteractiveItemsContainedWithinParents( QQuickWindow &window, QQuickItem *rootItem, const char *step )
+{
+    const QVector<QQuickItem *> items = discoverInteractiveProjectItems( rootItem );
+
+    for ( QQuickItem *item : items ) {
+        const QString key = stableKeyForItem( item );
+        if ( key.isEmpty() ) {
+            continue;
+        }
+
+        const QVariant skip = item->property( "testSkipLayoutSanity" );
+        if ( skip.isValid() && skip.toBool() ) {
+            continue;
+        }
+
+        if ( !itemCentreIsInsideWindow( window, item ) ) {
+            continue;
+        }
+
+        QQuickItem *parent = item->parentItem();
+        if ( parent == nullptr ) {
+            continue;
+        }
+
+        const QRectF childRect = sceneRect( item );
+        const QRectF parentRect = sceneRect( parent );
+
+        const QRectF parentInner = parentRect.adjusted( -2.0, -2.0, 2.0, 2.0 );
+        if ( !parentInner.contains( childRect ) ) {
+            const QString message =
+                QStringLiteral( "Interactive item overflows parent at %1: item=%2 parent=%3" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( key )
+                    .arg( parent->objectName() );
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+void verifyScrollBarsAreNotDegenerate( QQuickWindow &window, QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+
+        const QString baseUrl = QQmlEngine::contextForObject( item ) != nullptr
+            ? QQmlEngine::contextForObject( item )->baseUrl().toString()
+            : QString();
+        if ( baseUrl != QStringLiteral( "qrc:/qml/VcScrollBar.qml" )
+            && baseUrl != QStringLiteral( "qrc:/qml/VcFlickScrollBar.qml" ) ) {
+            continue;
+        }
+
+        const QString className = QString::fromLatin1( item->metaObject()->className() );
+        const bool isQmlScrollBar = className.startsWith( QStringLiteral( "QQuickScrollBar" ), Qt::CaseSensitive );
+        const bool isFlickBar = ( baseUrl == QStringLiteral( "qrc:/qml/VcFlickScrollBar.qml" ) );
+        if ( !isQmlScrollBar && !isFlickBar ) {
+            continue;
+        }
+
+        if ( !item->isVisible() ) {
+            continue;
+        }
+
+        // If it is visible, it must look like a scroll bar, not a tiny dot.
+        const QRectF r = sceneRect( item );
+        if ( r.width() < 8.0 || r.height() < 60.0 ) {
+            const QString message =
+                QStringLiteral( "Degenerate scrollbar geometry at %1: w=%2 h=%3 objectName=%4" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( r.width(), 0, 'f', 1 )
+                    .arg( r.height(), 0, 'f', 1 )
+                    .arg( item->objectName() );
+            QFAIL( qPrintable( message ) );
+        }
+
+        // It should be anchored near the right edge of its parent.
+        const QRectF pr = ( item->parentItem() != nullptr ) ? sceneRect( item->parentItem() ) : QRectF();
+        if ( pr.isValid() && r.right() < pr.right() - 6.0 ) {
+            const QString message =
+                QStringLiteral( "Scrollbar not near right edge at %1: x=%2 right=%3 parentRight=%4" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( r.left(), 0, 'f', 1 )
+                    .arg( r.right(), 0, 'f', 1 )
+                    .arg( pr.right(), 0, 'f', 1 );
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+void verifyNoDirectDefaultControls( QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    collectItemsDepthFirst( rootItem, all );
+
+    const QStringList forbiddenPrefixes = {
+        QStringLiteral( "QQuickButton" ),
+        QStringLiteral( "QQuickToolButton" ),
+        QStringLiteral( "QQuickTextField" ),
+        QStringLiteral( "QQuickComboBox" ),
+        QStringLiteral( "QQuickCheckBox" ),
+        QStringLiteral( "QQuickTabBar" ),
+        QStringLiteral( "QQuickTabButton" ),
+        QStringLiteral( "QQuickFrame" ),
+        QStringLiteral( "QQuickPane" ),
+        QStringLiteral( "QQuickItemDelegate" )
+    };
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+
+        const QQmlContext *ctx = QQmlEngine::contextForObject( item );
+        const QString baseUrl = ( ctx != nullptr ) ? ctx->baseUrl().toString() : QString();
+        if ( !baseUrl.startsWith( QStringLiteral( "qrc:/qml/" ) ) ) {
+            continue;
+        }
+
+        if ( baseUrl.startsWith( QStringLiteral( "qrc:/qml/Vc" ) ) ) {
+            continue;
+        }
+
+        const QString className = QString::fromLatin1( item->metaObject()->className() );
+        for ( const QString &prefix : forbiddenPrefixes ) {
+            if ( className.startsWith( prefix, Qt::CaseSensitive ) ) {
+                const QString parentName = ( item->parentItem() != nullptr ) ? item->parentItem()->objectName() : QString();
+                const QString message =
+                    QStringLiteral( "Direct default control detected (%1) at %2; baseUrl=%3 parentObjectName=%4 objectName=%5" )
+                        .arg( prefix )
+                        .arg( QString::fromLatin1( step ) )
+                        .arg( baseUrl )
+                        .arg( parentName )
+                        .arg( item->objectName() );
+                QFAIL( qPrintable( message ) );
+            }
+        }
+    }
+}
+
+void verifyNoVisibleTextOverlaps( QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    QVector<QQuickItem *> texts;
+
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+
+        const QString className = QString::fromLatin1( item->metaObject()->className() );
+        if ( !className.startsWith( QStringLiteral( "QQuickText" ), Qt::CaseSensitive ) ) {
+            continue;
+        }
+        if ( !isEffectivelyVisible( item ) ) {
+            continue;
+        }
+
+        const QString text = item->property( "text" ).toString();
+        if ( text.trimmed().isEmpty() ) {
+            continue;
+        }
+        if ( item->width() < 4.0 || item->height() < 4.0 ) {
+            continue;
+        }
+
+        texts.append( item );
+    }
+
+    for ( int i = 0; i < texts.size(); ++i ) {
+        QQuickItem *a = texts[i];
+        const QRectF ra = scenePaintedTextRect( a );
+        if ( ra.isEmpty() ) {
+            continue;
+        }
+        for ( int j = i + 1; j < texts.size(); ++j ) {
+            QQuickItem *b = texts[j];
+
+            if ( a == b ) {
+                continue;
+            }
+            if ( a->parentItem() == b || b->parentItem() == a ) {
+                continue;
+            }
+
+            const QRectF rb = scenePaintedTextRect( b );
+            if ( rb.isEmpty() ) {
+                continue;
+            }
+            const QRectF inter = ra.intersected( rb );
+            if ( inter.width() <= 2.0 || inter.height() <= 2.0 ) {
+                continue;
+            }
+
+            const QQmlContext *ctxA = QQmlEngine::contextForObject( a );
+            const QQmlContext *ctxB = QQmlEngine::contextForObject( b );
+            const QString baseA = ( ctxA != nullptr ) ? ctxA->baseUrl().toString() : QString();
+            const QString baseB = ( ctxB != nullptr ) ? ctxB->baseUrl().toString() : QString();
+
+            const QString message =
+                QStringLiteral( "Overlapping visible text items at %1: A(text=%2 baseUrl=%3) B(text=%4 baseUrl=%5)" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( a->property( "text" ).toString() )
+                    .arg( baseA )
+                    .arg( b->property( "text" ).toString() )
+                    .arg( baseB );
+
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+void verifyNoInteractiveOverlaps( QQuickWindow &window, QQuickItem *rootItem, const char *step )
+{
+    const QVector<QQuickItem *> items = discoverInteractiveProjectItems( rootItem );
+
+    for ( int i = 0; i < items.size(); ++i ) {
+        QQuickItem *a = items[i];
+        const QRectF ra = sceneRect( a );
+        for ( int j = i + 1; j < items.size(); ++j ) {
+            QQuickItem *b = items[j];
+
+            if ( a == b ) {
+                continue;
+            }
+
+            const QRectF rb = sceneRect( b );
+            const QRectF inter = ra.intersected( rb );
+            if ( inter.width() <= 1.0 || inter.height() <= 1.0 ) {
+                continue;
+            }
+
+            const QString keyA = stableKeyForItem( a );
+            const QString keyB = stableKeyForItem( b );
+            if ( keyA.contains( QStringLiteral( "Overlay" ) ) || keyB.contains( QStringLiteral( "Overlay" ) ) ) {
+                continue;
+            }
+
+            const QString message =
+                QStringLiteral( "Overlapping interactive items at %1: A=%2 B=%3 window=%4x%5" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( keyA )
+                    .arg( keyB )
+                    .arg( window.width() )
+                    .arg( window.height() );
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+bool shouldAttemptActivate( QObject *obj )
+{
+    bool out;
+
+    out = true;
+
+    if ( obj != nullptr ) {
+        const QVariant skip = obj->property( "testSkipActivate" );
+        if ( skip.isValid() ) {
+            out = !skip.toBool();
+        }
+    }
+
+    return out;
+}
+
+void collectItemsDepthFirst( QQuickItem *root, QVector<QQuickItem *> &out )
+{
+    if ( root == nullptr ) {
+        return;
+    }
+
+    out.append( root );
+
+    const QList<QQuickItem *> children = root->childItems();
+    for ( QQuickItem *child : children ) {
+        collectItemsDepthFirst( child, out );
+    }
+}
+
+QVector<QQuickItem *> discoverInteractiveProjectItems( QQuickItem *rootItem )
+{
+    QVector<QQuickItem *> all;
+    QVector<QQuickItem *> out;
+
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+        if ( !isInteractive( item ) ) {
+            continue;
+        }
+        if ( item->width() < 6.0 || item->height() < 6.0 ) {
+            continue;
+        }
+        if ( !item->isVisible() ) {
+            continue;
+        }
+        if ( !item->isEnabled() ) {
+            continue;
+        }
+
+        out.append( item );
+    }
+
+    return out;
+}
+
+QString stableKeyForItem( QQuickItem *item )
+{
+    QString out;
+
+    out = QString();
+
+    if ( item != nullptr ) {
+        out = item->objectName();
+    }
+
+    return out;
+}
+
+bool itemCentreIsInsideWindow( QQuickWindow &window, QQuickItem *item )
+{
+    bool out;
+
+    out = false;
+
+    if ( item != nullptr ) {
+        const QPointF scenePoint = item->mapToScene( QPointF( item->width() / 2.0, item->height() / 2.0 ) );
+        out =
+            ( scenePoint.x() >= 1.0 )
+            && ( scenePoint.y() >= 1.0 )
+            && ( scenePoint.x() <= window.width() - 2.0 )
+            && ( scenePoint.y() <= window.height() - 2.0 );
+    }
+
+    return out;
+}
+
+bool isDeprioritisedClickTarget( const QString &key )
+{
+    if ( key == QStringLiteral( "disconnectButton" ) ) {
+        return true;
+    }
+    if ( key.contains( QStringLiteral( "CloseButton" ), Qt::CaseSensitive ) ) {
+        return true;
+    }
+    if ( key.contains( QStringLiteral( "closeButton" ), Qt::CaseSensitive ) ) {
+        return true;
+    }
+
+    return false;
+}
+
+void runAutomaticInteractionSweep( QQuickWindow &window, QQuickItem *rootItem )
+{
+    QSet<QString> hovered;
+    QSet<QString> clicked;
+
+    const int clickBudget = 200;
+    int clickCount;
+
+    clickCount = 0;
+
+    for ( int iteration = 0; iteration < clickBudget; ++iteration ) {
+        const QVector<QQuickItem *> items = discoverInteractiveProjectItems( rootItem );
+        QVector<QQuickItem *> sorted;
+
+        sorted = items;
+        std::sort( sorted.begin(), sorted.end(), []( QQuickItem *a, QQuickItem *b ) {
+            return stableKeyForItem( a ) < stableKeyForItem( b );
+        } );
+
+        for ( QQuickItem *item : sorted ) {
+            const QString key = stableKeyForItem( item );
+
+            if ( key.isEmpty() ) {
+                const QQmlContext *ctx = QQmlEngine::contextForObject( item );
+                const QString baseUrl = ( ctx != nullptr ) ? ctx->baseUrl().toString() : QString();
+                const QString className = QString::fromLatin1( item->metaObject()->className() );
+                const QString text = item->property( "text" ).toString();
+                const QString parentName = ( item->parentItem() != nullptr ) ? item->parentItem()->objectName() : QString();
+
+                const QString message =
+                    QStringLiteral( "Interactive project QML item is missing objectName: class=%1 baseUrl=%2 parentObjectName=%3 text=%4" )
+                        .arg( className )
+                        .arg( baseUrl )
+                        .arg( parentName )
+                        .arg( text );
+
+                QFAIL( qPrintable( message ) );
+            }
+
+            if ( !hovered.contains( key ) ) {
+                const QPointF posBeforeHover = sceneTopLeft( item );
+
+                if ( itemCentreIsInsideWindow( window, item ) ) {
+                    moveMouseToItemCenter( window, item );
+                    QTest::qWait( 350 );
+                    failIfAnyWarnings( "auto-hover" );
+                    verifyScenePositionUnchanged( item, posBeforeHover, 1.0, "auto-hover" );
+                    clearMessages();
+                }
+
+                hovered.insert( key );
+            }
+        }
+
+        {
+            QQuickItem *toClick;
+            QString clickKey;
+
+            toClick = nullptr;
+
+            for ( QQuickItem *item : sorted ) {
+                const QString key = stableKeyForItem( item );
+                if ( clicked.contains( key ) ) {
+                    continue;
+                }
+                if ( !shouldAttemptActivate( item ) ) {
+                    clicked.insert( key );
+                    continue;
+                }
+                if ( isDeprioritisedClickTarget( key ) ) {
+                    continue;
+                }
+                if ( !itemCentreIsInsideWindow( window, item ) ) {
+                    continue;
+                }
+
+                toClick = item;
+                clickKey = key;
+                break;
+            }
+
+            if ( toClick == nullptr ) {
+                for ( QQuickItem *item : sorted ) {
+                    const QString key = stableKeyForItem( item );
+                    if ( clicked.contains( key ) ) {
+                        continue;
+                    }
+                    if ( !shouldAttemptActivate( item ) ) {
+                        clicked.insert( key );
+                        continue;
+                    }
+                    if ( !itemCentreIsInsideWindow( window, item ) ) {
+                        continue;
+                    }
+
+                    toClick = item;
+                    clickKey = key;
+                    break;
+                }
+            }
+
+            if ( toClick == nullptr ) {
+                break;
+            }
+
+            clickItemCenter( window, toClick );
+            QTest::qWait( 60 );
+            failIfAnyWarnings( "auto-click" );
+            clearMessages();
+
+            clicked.insert( clickKey );
+            clickCount += 1;
+        }
+    }
+
+    QVERIFY( clickCount >= 1 );
+}
+
 }
 
 class tst_QmlUi : public QObject
@@ -154,10 +1033,24 @@ private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
     void navigation_joinAndHost_emitNoWarnings();
+    void preferences_categorySwitchingShowsExpectedPane();
+    void themePreferences_propagatePaletteRolesToPages();
+    void style_projectDoesNotUseDefaultControlsDirectly();
+    void style_projectDoesNotUseUnsupportedCanvasApis();
+    void layout_noOverlapsInKeyScreens();
+    void layout_textContrastIsReadableInKeyScreens();
+    void preferences_scrollbarAndWheelWork();
+    void preferences_wheelOverComboBox_doesNotChangeSelection();
+    void preferences_clickInsidePanel_doesNotClose();
+    void themePresetAccents_mapToExplicitHighlightColours();
+    void themePresetAccents_shiftInDarkMode();
+    void landing_primaryButtons_haveReadableTextInVictorianAndLight();
 };
 
 void tst_QmlUi::initTestCase()
 {
+    qputenv( "VCSTREAM_DISABLE_MEDIA_ENUM", "1" );
+
     g_previousHandler = qInstallMessageHandler( messageHandler );
 
     g_settingsDir.reset( new QTemporaryDir() );
@@ -186,6 +1079,7 @@ void tst_QmlUi::cleanupTestCase()
 void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
 {
     AppSupervisor supervisor;
+    OklchUtil oklchUtil;
     QQmlApplicationEngine engine;
 
     QObject::connect(
@@ -198,6 +1092,8 @@ void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
             }
         } );
 
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
 
@@ -302,154 +1198,767 @@ void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
     QQuickItem *rootItem = window->contentItem();
     QVERIFY( rootItem != nullptr );
 
-    {
-        QQuickItem *joinButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
-        QVERIFY2( joinButton != nullptr, "joinRoomButton" );
-        QTRY_VERIFY_WITH_TIMEOUT( joinButton->isVisible(), 1000 );
-        clickItemCenter( *window, joinButton );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "join-click" );
-        clearMessages();
+    runAutomaticInteractionSweep( *window, rootItem );
+}
 
-        QQuickItem *disconnectButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "disconnectButton" ) );
-        QVERIFY2( disconnectButton != nullptr, "disconnectButton" );
-        QTRY_VERIFY_WITH_TIMEOUT( disconnectButton->isVisible(), 1000 );
+void tst_QmlUi::preferences_categorySwitchingShowsExpectedPane()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
 
-        QQuickItem *sourceRow0 = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( sourceRow0 = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceRow_0" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( sourceRow0->isVisible(), 1000 );
-        clickItemCenter( *window, sourceRow0 );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "source-row-click" );
-        clearMessages();
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
 
-        QQuickItem *inspectorPanel = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( inspectorPanel = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorPanel" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( inspectorPanel->isVisible(), 1000 );
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
 
-        {
-            const QPointF panelPoint = inspectorPanel->mapToScene( QPointF( 10.0, 10.0 ) );
-            QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, panelPoint.toPoint() );
-            QTest::qWait( 50 );
-            failIfAnyWarnings( "inspector-panel-click" );
-            clearMessages();
-            QVERIFY( inspectorPanel->isVisible() );
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 50 );
+    failIfAnyWarnings( "preferences-open-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QQuickItem *preferencesButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingPreferencesButton" ) );
+    QVERIFY2( preferencesButton != nullptr, "landingPreferencesButton" );
+
+    clickItemCenter( *window, preferencesButton );
+    QTest::qWait( 50 );
+
+    QQuickItem *generalPane = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesGeneralPane" ) );
+    QQuickItem *devicesCategory = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesCategoryDevices" ) );
+    QVERIFY2( generalPane != nullptr, "preferencesGeneralPane" );
+    QVERIFY2( devicesCategory != nullptr, "preferencesCategoryDevices" );
+
+    QVERIFY( generalPane->property( "visible" ).toBool() );
+    failIfAnyWarnings( "preferences-general-pane-visible" );
+    clearMessages();
+
+    clickItemCenter( *window, devicesCategory );
+    QTest::qWait( 50 );
+
+    QQuickItem *devicesPane = nullptr;
+    QQuickItem *deviceRefreshButton = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT( ( devicesPane = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesDevicesPane" ) ) ) != nullptr, 1000 );
+    QTRY_VERIFY_WITH_TIMEOUT( ( deviceRefreshButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesDeviceRefreshButton" ) ) ) != nullptr, 1000 );
+
+    QVERIFY( devicesPane->property( "visible" ).toBool() );
+    QVERIFY( deviceRefreshButton->property( "visible" ).toBool() );
+    failIfAnyWarnings( "preferences-devices-pane-visible" );
+    clearMessages();
+}
+
+void tst_QmlUi::themePreferences_propagatePaletteRolesToPages()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 50 );
+    failIfAnyWarnings( "theme-post-load" );
+    clearMessages();
+
+    QObject *landingPage = rootObject->findChild<QObject *>( QStringLiteral( "landingPage" ) );
+    QObject *joinRoomButton = rootObject->findChild<QObject *>( QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( landingPage != nullptr, "landingPage" );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+
+    const QColor initialHighlight = landingPage->property( "resolvedHighlightColour" ).value<QColor>();
+    const QColor initialButton = landingPage->property( "resolvedButtonColour" ).value<QColor>();
+
+    supervisor.preferences()->setProperty( "accent", QStringLiteral( "green" ) );
+    supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+
+    QTRY_VERIFY_WITH_TIMEOUT( landingPage->property( "resolvedHighlightColour" ).value<QColor>() != initialHighlight, 1000 );
+    QTRY_VERIFY_WITH_TIMEOUT( landingPage->property( "resolvedButtonColour" ).value<QColor>() != initialButton, 1000 );
+
+    const QColor landingHighlight = landingPage->property( "resolvedHighlightColour" ).value<QColor>();
+    const QColor landingButton = landingPage->property( "resolvedButtonColour" ).value<QColor>();
+
+    clickItemCenter( *window, qobject_cast<QQuickItem *>( joinRoomButton ) );
+
+    QObject *disconnectButton = rootObject->findChild<QObject *>( QStringLiteral( "disconnectButton" ) );
+    QObject *shellPage = rootObject->findChild<QObject *>( QStringLiteral( "shellPage" ) );
+    QVERIFY2( disconnectButton != nullptr, "disconnectButton" );
+    QVERIFY2( shellPage != nullptr, "shellPage" );
+
+    const QColor shellHighlight = shellPage->property( "resolvedHighlightColour" ).value<QColor>();
+    const QColor shellButton = shellPage->property( "resolvedButtonColour" ).value<QColor>();
+
+    QCOMPARE( shellHighlight, landingHighlight );
+    QCOMPARE( shellButton, landingButton );
+    failIfAnyWarnings( "theme-shell-palette" );
+    clearMessages();
+}
+
+void tst_QmlUi::style_projectDoesNotUseDefaultControlsDirectly()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 50 );
+    failIfAnyWarnings( "style-post-load" );
+    clearMessages();
+
+    verifyNoDirectDefaultControls( window->contentItem(), "style-default-controls" );
+}
+
+void tst_QmlUi::style_projectDoesNotUseUnsupportedCanvasApis()
+{
+    // Scan the embedded QML resources to avoid depending on a checkout-relative path.
+    QDirIterator it( QStringLiteral( ":/qml" ), QStringList() << QStringLiteral( "*.qml" ), QDir::Files, QDirIterator::Subdirectories );
+
+    QVERIFY2( it.hasNext(), "Expected QML resources under :/qml" );
+
+    while ( it.hasNext() ) {
+        const QString path = it.next();
+        QFile f( path );
+        QVERIFY2( f.open( QIODevice::ReadOnly ), qPrintable( path ) );
+
+        const QString text = QString::fromUtf8( f.readAll() );
+
+        // Canvas2D context API support varies across Qt versions.
+        // `reset()` is a common footgun that can crash/throw at runtime.
+        QVERIFY2( !text.contains( QStringLiteral( "context.reset(" ) ), qPrintable( QStringLiteral( "Unsupported Canvas API used in %1" ).arg( path ) ) );
+    }
+}
+
+void tst_QmlUi::layout_noOverlapsInKeyScreens()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "custom" ) );
+        supervisor.preferences()->setProperty( "customAccentHueDegrees", 170.0 );
+        supervisor.preferences()->setProperty( "customAccentChroma", 0.20 );
+        supervisor.preferences()->setProperty( "customAccentLightness", 0.62 );
+    }
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "layout-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    verifyNoVisibleTextOverlaps( rootItem, "landing" );
+    verifyNoInteractiveOverlaps( *window, rootItem, "landing" );
+    verifyInteractiveItemsContainedWithinParents( *window, rootItem, "landing" );
+
+    QQuickItem *preferencesButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingPreferencesButton" ) );
+    QVERIFY2( preferencesButton != nullptr, "landingPreferencesButton" );
+    clickItemCenter( *window, preferencesButton );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "layout-open-preferences" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlaps( rootItem, "preferences" );
+    verifyNoInteractiveOverlaps( *window, rootItem, "preferences" );
+    verifyInteractiveItemsContainedWithinParents( *window, rootItem, "preferences" );
+    verifyScrollBarsAreNotDegenerate( *window, rootItem, "preferences" );
+
+    QQuickItem *closeButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesCloseButton" ) );
+    QVERIFY2( closeButton != nullptr, "preferencesCloseButton" );
+    clickItemCenter( *window, closeButton );
+    QTest::qWait( 80 );
+
+    QQuickItem *joinRoomButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+    clickItemCenter( *window, joinRoomButton );
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "layout-go-shell" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlaps( rootItem, "shell" );
+    verifyNoInteractiveOverlaps( *window, rootItem, "shell" );
+    verifyInteractiveItemsContainedWithinParents( *window, rootItem, "shell" );
+}
+
+void tst_QmlUi::layout_textContrastIsReadableInKeyScreens()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "green" ) );
+    }
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "contrast-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    verifyReadableTextContrast( *window, rootItem, "landing" );
+    verifyInkStrokeContracts( *window, rootItem, "landing" );
+
+    QQuickItem *preferencesButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingPreferencesButton" ) );
+    QVERIFY2( preferencesButton != nullptr, "landingPreferencesButton" );
+    clickItemCenter( *window, preferencesButton );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "contrast-open-preferences" );
+    clearMessages();
+
+    verifyReadableTextContrast( *window, rootItem, "preferences" );
+    verifyInkStrokeContracts( *window, rootItem, "preferences" );
+}
+
+void tst_QmlUi::preferences_scrollbarAndWheelWork()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "custom" ) );
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+    }
+
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+
+    window->resize( 360, 220 );
+
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "scroll-open-preferences" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *scrollView = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesGeneralScrollView" ) );
+    QQuickItem *scrollBar = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesGeneralScrollBar" ) );
+    QVERIFY2( scrollView != nullptr, "preferencesGeneralScrollView" );
+    QVERIFY2( scrollBar != nullptr, "preferencesGeneralScrollBar" );
+
+    QTRY_VERIFY_WITH_TIMEOUT( scrollBar->isVisible(), 1000 );
+    QVERIFY( scrollBar->width() >= 8.0 );
+    QVERIFY( scrollBar->height() >= 60.0 );
+
+    const QRectF viewR = sceneRect( scrollView );
+    const QRectF barR = sceneRect( scrollBar );
+    QVERIFY( barR.right() >= viewR.right() - 12.0 );
+
+    QObject *flickableObj = scrollView->property( "contentItem" ).value<QObject *>();
+    QQuickItem *flickable = qobject_cast<QQuickItem *>( flickableObj );
+    if ( flickable == nullptr ) {
+        flickable = nullptr;
+        const QList<QQuickItem *> children = scrollView->childItems();
+        for ( QQuickItem *child : children ) {
+            if ( child != nullptr ) {
+                const QString className = QString::fromLatin1( child->metaObject()->className() );
+                if ( className.startsWith( QStringLiteral( "QQuickFlickable" ) ) ) {
+                    flickable = child;
+                    break;
+                }
+            }
         }
+    }
+    QVERIFY2( flickable != nullptr, "preferencesGeneralScrollView flickable" );
 
-        QQuickItem *inspectorExportToggle = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( inspectorExportToggle = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorBrowserExportToggle" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( inspectorExportToggle->isVisible(), 1000 );
-        const QPointF exportTogglePosBeforeHover = sceneTopLeft( inspectorExportToggle );
-        moveMouseToItemCenter( *window, inspectorExportToggle );
-        QTest::qWait( 350 );
-        failIfAnyWarnings( "inspector-export-hover" );
-        verifyScenePositionUnchanged( inspectorExportToggle, exportTogglePosBeforeHover, 0.5, "export toggle" );
-        clearMessages();
+    // Ensure pointer is over the scroll view so wheel routing matches real usage.
+    moveMouseToItemCenter( *window, scrollView );
 
-        clickItemCenter( *window, inspectorExportToggle );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "inspector-export-click" );
-        clearMessages();
+    const qreal before = flickable->property( "contentY" ).toReal();
+    wheelItemCenter( *window, scrollView, -120 );
+    QTRY_VERIFY_WITH_TIMEOUT( flickable->property( "contentY" ).toReal() > before + 1.0, 1000 );
+    failIfAnyWarnings( "scroll-wheel" );
+    clearMessages();
+}
 
-        QQuickItem *inspectorOverlay = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( inspectorOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorOverlay" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( inspectorOverlay->isVisible(), 1000 );
-        const QPointF overlayPoint = inspectorOverlay->mapToScene( QPointF( 5.0, 5.0 ) );
-        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, overlayPoint.toPoint() );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "inspector-dismiss-outside" );
-        clearMessages();
+void tst_QmlUi::preferences_wheelOverComboBox_doesNotChangeSelection()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
 
-        QTRY_VERIFY_WITH_TIMEOUT( !inspectorOverlay->isVisible(), 1000 );
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
 
-        clickItemCenter( *window, disconnectButton );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "disconnect-click" );
-        clearMessages();
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "custom" ) );
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+    }
+
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+
+    window->resize( 360, 220 );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "combo-wheel-open" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *scrollView = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesGeneralScrollView" ) );
+    QVERIFY2( scrollView != nullptr, "preferencesGeneralScrollView" );
+
+    QObject *flickableObj = scrollView->property( "contentItem" ).value<QObject *>();
+    QQuickItem *flickable = qobject_cast<QQuickItem *>( flickableObj );
+    QVERIFY2( flickable != nullptr, "preferencesGeneralScrollView flickable" );
+
+    QQuickItem *combo = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesAccentCombo" ) );
+    QVERIFY2( combo != nullptr, "preferencesAccentCombo" );
+
+    const int beforeIndex = combo->property( "currentIndex" ).toInt();
+    const qreal beforeY = flickable->property( "contentY" ).toReal();
+
+    moveMouseToItemCenter( *window, combo );
+    wheelAtItemCenterViaWindow( *window, combo, -120 );
+
+    QTRY_VERIFY_WITH_TIMEOUT( flickable->property( "contentY" ).toReal() > beforeY + 1.0, 1000 );
+    QCOMPARE( combo->property( "currentIndex" ).toInt(), beforeIndex );
+
+    failIfAnyWarnings( "combo-wheel" );
+    clearMessages();
+}
+
+void tst_QmlUi::preferences_clickInsidePanel_doesNotClose()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "prefs-click-open" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *overlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesOverlay" ) );
+    QQuickItem *panel = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesPanel" ) );
+    QVERIFY2( overlay != nullptr, "preferencesOverlay" );
+    QVERIFY2( panel != nullptr, "preferencesPanel" );
+    QVERIFY( overlay->isVisible() );
+
+    {
+        const QPointF scenePoint = panel->mapToScene( QPointF( panel->width() - 10.0, panel->height() - 10.0 ) );
+        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, scenePoint.toPoint() );
+        QTest::qWait( 60 );
+        QVERIFY2( overlay->isVisible(), "overlay should remain open after inside click" );
     }
 
     {
-        QQuickItem *hostButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "hostRoomButton" ) );
-        QVERIFY2( hostButton != nullptr, "hostRoomButton" );
-        QTRY_VERIFY_WITH_TIMEOUT( hostButton->isVisible(), 1000 );
-        clickItemCenter( *window, hostButton );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "host-click" );
-        clearMessages();
+        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, QPoint( 2, 2 ) );
+        QTRY_VERIFY_WITH_TIMEOUT( !overlay->isVisible(), 1000 );
+    }
 
-        QQuickItem *disconnectButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "disconnectButton" ) );
-        QVERIFY2( disconnectButton != nullptr, "disconnectButton" );
-        QTRY_VERIFY_WITH_TIMEOUT( disconnectButton->isVisible(), 1000 );
+    failIfAnyWarnings( "prefs-click" );
+    clearMessages();
+}
 
-        QQuickItem *sourceRow0 = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( sourceRow0 = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceRow_0" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( sourceRow0->isVisible(), 1000 );
-        clickItemCenter( *window, sourceRow0 );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "source-row-click" );
-        clearMessages();
+static void verifyColourApprox( const QColor &actual, const QColor &expected, const int tolerance, const char *context )
+{
+    const int dr = qAbs( actual.red() - expected.red() );
+    const int dg = qAbs( actual.green() - expected.green() );
+    const int db = qAbs( actual.blue() - expected.blue() );
 
-        QQuickItem *inspectorExportToggle = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( inspectorExportToggle = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorBrowserExportToggle" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( inspectorExportToggle->isVisible(), 1000 );
-        const QPointF exportTogglePosBeforeHover = sceneTopLeft( inspectorExportToggle );
-        moveMouseToItemCenter( *window, inspectorExportToggle );
-        QTest::qWait( 350 );
-        failIfAnyWarnings( "inspector-export-hover" );
-        verifyScenePositionUnchanged( inspectorExportToggle, exportTogglePosBeforeHover, 0.5, "export toggle" );
-        clearMessages();
+    if ( dr > tolerance || dg > tolerance || db > tolerance ) {
+        const QString message =
+            QStringLiteral( "%1 expected=%2 actual=%3 dr=%4 dg=%5 db=%6" )
+                .arg( QString::fromLatin1( context ) )
+                .arg( expected.name( QColor::HexRgb ) )
+                .arg( actual.name( QColor::HexRgb ) )
+                .arg( dr )
+                .arg( dg )
+                .arg( db );
+        QFAIL( qPrintable( message ) );
+    }
+}
 
-        clickItemCenter( *window, inspectorExportToggle );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "inspector-export-click" );
-        clearMessages();
+void tst_QmlUi::themePresetAccents_mapToExplicitHighlightColours()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
 
-        QQuickItem *inspectorPanel = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( inspectorPanel = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorPanel" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( inspectorPanel->isVisible(), 1000 );
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
 
-        {
-            const QPointF panelPoint = inspectorPanel->mapToScene( QPointF( 10.0, 10.0 ) );
-            QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, panelPoint.toPoint() );
-            QTest::qWait( 50 );
-            failIfAnyWarnings( "inspector-panel-click" );
-            clearMessages();
-            QVERIFY( inspectorPanel->isVisible() );
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+    }
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 60 );
+
+    struct Expectation {
+        QString accent;
+        QColor expected;
+    };
+
+    const QVector<Expectation> expectations = {
+        { QStringLiteral( "red" ), QColor( QStringLiteral( "#B3263A" ) ) },
+        { QStringLiteral( "orange" ), QColor( QStringLiteral( "#E07A2F" ) ) },
+        { QStringLiteral( "yellow" ), QColor( QStringLiteral( "#E0B21B" ) ) },
+        { QStringLiteral( "green" ), QColor( QStringLiteral( "#2FA66B" ) ) },
+        { QStringLiteral( "cyan" ), QColor( QStringLiteral( "#24B3B6" ) ) },
+        { QStringLiteral( "blue" ), QColor( QStringLiteral( "#3D7BEB" ) ) },
+        { QStringLiteral( "pink" ), QColor( QStringLiteral( "#FC89AC" ) ) },
+        { QStringLiteral( "purple" ), QColor( QStringLiteral( "#8F63F4" ) ) },
+        // victorian primary accent is explicit in QML (oxblood).
+        { QStringLiteral( "victorian" ), QColor( QStringLiteral( "#5B1F2A" ) ) },
+    };
+
+    QObject *paletteObj = window->property( "palette" ).value<QObject *>();
+    QVERIFY2( paletteObj != nullptr, "window palette object" );
+
+    for ( const Expectation &e : expectations ) {
+        if ( supervisor.preferences() != nullptr ) {
+            supervisor.preferences()->setProperty( "accent", e.accent );
         }
 
-        QQuickItem *inspectorOverlay = nullptr;
-        QTRY_VERIFY_WITH_TIMEOUT(
-            ( inspectorOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorOverlay" ) ) ) != nullptr,
-            1000 );
-        QTRY_VERIFY_WITH_TIMEOUT( inspectorOverlay->isVisible(), 1000 );
-        const QPointF overlayPoint = inspectorOverlay->mapToScene( QPointF( 5.0, 5.0 ) );
-        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, overlayPoint.toPoint() );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "inspector-dismiss-outside" );
-        clearMessages();
+        QTRY_VERIFY_WITH_TIMEOUT( paletteObj->property( "highlight" ).value<QColor>().isValid(), 500 );
+        const QColor actual = paletteObj->property( "highlight" ).value<QColor>();
 
-        QTRY_VERIFY_WITH_TIMEOUT( !inspectorOverlay->isVisible(), 1000 );
+        verifyColourApprox( actual, e.expected, 2, qPrintable( QStringLiteral( "accent=%1" ).arg( e.accent ) ) );
+    }
 
-        clickItemCenter( *window, disconnectButton );
-        QTest::qWait( 50 );
-        failIfAnyWarnings( "disconnect-click" );
+    failIfAnyWarnings( "preset-accents" );
+    clearMessages();
+}
+
+void tst_QmlUi::themePresetAccents_shiftInDarkMode()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 60 );
+
+    QObject *paletteObj = window->property( "palette" ).value<QObject *>();
+    QVERIFY2( paletteObj != nullptr, "window palette object" );
+
+    auto highlight = [&]() {
+        return paletteObj->property( "highlight" ).value<QColor>();
+    };
+
+    // Use a couple of accents that cover different hue regions.
+    const QVector<QString> accents = { QStringLiteral( "red" ), QStringLiteral( "blue" ) };
+
+    for ( const QString &accent : accents ) {
+        if ( supervisor.preferences() != nullptr ) {
+            supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+            supervisor.preferences()->setProperty( "accent", accent );
+        }
+        QTRY_VERIFY_WITH_TIMEOUT( highlight().isValid(), 500 );
+        const QColor light = highlight();
+
+        if ( supervisor.preferences() != nullptr ) {
+            supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "dark" ) );
+        }
+        QTRY_VERIFY_WITH_TIMEOUT( highlight().isValid() && ( highlight() != light ), 800 );
+        const QColor dark = highlight();
+
+        const qreal lLight = relativeLuminance( light );
+        const qreal lDark = relativeLuminance( dark );
+        QVERIFY2( lDark > lLight + 0.02, qPrintable( QStringLiteral( "accent=%1 luminance did not increase in dark mode (light=%2 dark=%3)" )
+            .arg( accent )
+            .arg( lLight )
+            .arg( lDark ) ) );
+    }
+
+    failIfAnyWarnings( "preset-accents-dark-shift" );
+    clearMessages();
+}
+
+static qreal contrastRatioForColours( const QColor &a, const QColor &b )
+{
+    return contrastRatio( a, b );
+}
+
+void tst_QmlUi::landing_primaryButtons_haveReadableTextInVictorianAndLight()
+{
+    struct Scenario {
+        QString themeMode;
+        QString accent;
+    };
+
+    const QVector<Scenario> scenarios = {
+        { QStringLiteral( "victorian" ), QStringLiteral( "victorian" ) },
+        { QStringLiteral( "light" ), QStringLiteral( "victorian" ) },
+        { QStringLiteral( "light" ), QStringLiteral( "pink" ) },
+    };
+
+    for ( const Scenario &s : scenarios ) {
+        AppSupervisor supervisor;
+        OklchUtil oklchUtil;
+        QQmlApplicationEngine engine;
+
+        QObject::connect(
+            &engine,
+            &QQmlApplicationEngine::warnings,
+            &engine,
+            []( const QList<QQmlError> &warnings ) {
+                for ( const QQmlError &e : warnings ) {
+                    g_messages.append( e.toString() );
+                }
+            } );
+
+        if ( supervisor.preferences() != nullptr ) {
+            supervisor.preferences()->setProperty( "themeMode", s.themeMode );
+            supervisor.preferences()->setProperty( "accent", s.accent );
+        }
+
+        engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+        engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+        engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+        engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+        QCOMPARE( engine.rootObjects().size(), 1 );
+
+        QObject *rootObject = engine.rootObjects().first();
+        QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+        QVERIFY( window != nullptr );
+        QVERIFY( QTest::qWaitForWindowExposed( window ) );
+        QTest::qWait( 80 );
+
+        QQuickItem *rootItem = window->contentItem();
+        QVERIFY( rootItem != nullptr );
+
+        QQuickItem *join = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+        QQuickItem *host = findItemByObjectNameRecursive( rootItem, QStringLiteral( "hostRoomButton" ) );
+        QVERIFY2( join != nullptr, "joinRoomButton" );
+        QVERIFY2( host != nullptr, "hostRoomButton" );
+
+        auto verifyButton = [&]( QQuickItem *button, const char *name ) {
+            const QColor fill = button->property( "surfaceColour" ).value<QColor>();
+            QVERIFY2( fill.isValid(), name );
+
+            QObject *pal = button->property( "palette" ).value<QObject *>();
+            QVERIFY2( pal != nullptr, name );
+            const QColor fg = pal->property( "buttonText" ).value<QColor>();
+            QVERIFY2( fg.isValid(), name );
+
+            const qreal ratio = contrastRatioForColours( fg, fill );
+            const qreal minRatio = ( s.themeMode == QStringLiteral( "light" ) && s.accent == QStringLiteral( "pink" ) ? 4.5 : 3.5 );
+            QVERIFY2( ratio >= minRatio, qPrintable( QStringLiteral( "%1 themeMode=%2 accent=%3 contrast=%4 min=%5 fg=%6 fill=%7" )
+                .arg( QString::fromLatin1( name ) )
+                .arg( s.themeMode )
+                .arg( s.accent )
+                .arg( ratio )
+                .arg( minRatio )
+                .arg( fg.name( QColor::HexRgb ) )
+                .arg( fill.name( QColor::HexRgb ) ) ) );
+        };
+
+        verifyButton( join, "joinRoomButton" );
+        verifyButton( host, "hostRoomButton" );
+
+        failIfAnyWarnings( "landing-button-contrast" );
         clearMessages();
     }
 }
+
 
 int main( int argc, char **argv )
 {

@@ -4,5 +4,17 @@
         <file>LandingPage.qml</file>
         <file>ShellPage.qml</file>
         <file>HelpTip.qml</file>
+        <file>PreferencesOverlay.qml</file>
+        <file>VcButton.qml</file>
+        <file>VcCheckBox.qml</file>
+        <file>VcCloseButton.qml</file>
+        <file>VcComboBox.qml</file>
+        <file>VcFlickScrollBar.qml</file>
+        <file>VcScrollBar.qml</file>
+        <file>VcTabBar.qml</file>
+        <file>VcTabButton.qml</file>
+        <file>VcToolButton.qml</file>
+        <file>VcPanel.qml</file>
+        <file>VcTextField.qml</file>
     </qresource>
 </RCC>

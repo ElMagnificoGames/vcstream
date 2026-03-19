@@ -21,11 +21,13 @@ Functions:
 
 - `template <typename Fn> int crashguard::runGuardedMain( const char *context, Fn &&fn ) noexcept`
   - Runs `fn()` under a catch-all guard.
+  - `context` is a short static string describing the entry point (for example: "vcstream main").
   - On exception, logs both a plain-language reason and technical details, and returns a non-zero exit code.
   - Intended for `main()`.
 
 - `template <typename Fn> void crashguard::runGuardedThread( const char *threadName, UnhandledExceptionPolicy policy, Fn &&fn ) noexcept`
   - Runs `fn()` under a catch-all guard.
+  - `threadName` is a short static string describing the thread entry point.
   - On exception, logs both a plain-language reason and technical details.
   - If `policy` is `RequestAppExit`, calls `crashguard::requestAppExit( 1 )`.
   - Intended for worker thread entry points.

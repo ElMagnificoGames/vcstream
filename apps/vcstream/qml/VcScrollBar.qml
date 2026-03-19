@@ -1,0 +1,63 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+ScrollBar {
+    id: control
+
+    property var theme
+    property bool vcStyled: true
+
+    implicitWidth: 12
+    width: implicitWidth
+    minimumSize: 0.12
+
+    // Some desktop styles add internal padding that can collapse the available
+    // track size for narrow bars (e.g. availableWidth becomes 0). We want the
+    // thumb to remain visible and use the full allocated geometry.
+    leftPadding: 0
+    rightPadding: 0
+    topPadding: 0
+    bottomPadding: 0
+
+    // Render whenever the content is scrollable.
+    // This avoids style/plugin differences that can hide scroll bars entirely.
+    readonly property bool vcCanScroll: ( control.size < 0.999 )
+    visible: ( control.policy !== ScrollBar.AlwaysOff ) && vcCanScroll
+    opacity: 1.0
+
+    background: Rectangle {
+        radius: 6
+        anchors.fill: parent
+        color: ( theme ? Qt.rgba( theme.panelInsetColour.r, theme.panelInsetColour.g, theme.panelInsetColour.b, 0.35 ) : "transparent" )
+        border.color: ( theme ? Qt.rgba( theme.frameColour.r, theme.frameColour.g, theme.frameColour.b, 0.40 ) : "transparent" )
+        border.width: ( theme ? 1 : 0 )
+    }
+
+    contentItem: Rectangle {
+        radius: 6
+        color: ( theme ? theme.primaryAccentColour : palette.highlight )
+        opacity: control.pressed ? 0.95 : ( control.hovered ? 0.90 : 0.80 )
+
+        border.color: ( theme ? Qt.rgba( theme.frameColour.r, theme.frameColour.g, theme.frameColour.b, 0.55 ) : "transparent" )
+        border.width: ( theme ? 1 : 0 )
+
+        readonly property real trackW: control.width
+        readonly property real trackH: control.height
+
+        width: ( control.orientation === Qt.Horizontal )
+            ? Math.max( 6, trackW * control.size )
+            : trackW
+
+        height: ( control.orientation === Qt.Horizontal )
+            ? trackH
+            : Math.max( 6, trackH * control.size )
+
+        x: ( control.orientation === Qt.Horizontal )
+            ? Math.max( 0, Math.min( trackW - width, trackW * control.position ) )
+            : 0
+
+        y: ( control.orientation === Qt.Horizontal )
+            ? 0
+            : Math.max( 0, Math.min( trackH - height, trackH * control.position ) )
+    }
+}

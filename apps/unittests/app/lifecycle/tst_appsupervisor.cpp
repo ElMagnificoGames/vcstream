@@ -3,6 +3,9 @@
 #include <QCoreApplication>
 #include <QObject>
 #include <QSignalSpy>
+#include <QScopedPointer>
+#include <QSettings>
+#include <QTemporaryDir>
 
 #include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
@@ -14,6 +17,8 @@ class tst_AppSupervisor : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void initTestCase();
+    void cleanupTestCase();
     void appVersion_roundTripsExplicitValues();
     void appVersion_roundTripsDeterministicRandomAscii();
     void joinRoomEnabled_defaultsToFalse();
@@ -22,6 +27,35 @@ private Q_SLOTS:
     void hostRoomEnabled_emitsChangedOnlyOnChange();
     void shutdown_isSafeToCall();
 };
+
+namespace {
+
+QScopedPointer<QTemporaryDir> g_settingsDir;
+
+}
+
+void tst_AppSupervisor::initTestCase()
+{
+    g_settingsDir.reset( new QTemporaryDir() );
+    QVERIFY( g_settingsDir->isValid() );
+
+    QCoreApplication::setOrganizationName( QStringLiteral( "vcstream-tests" ) );
+    QCoreApplication::setApplicationName( QStringLiteral( "tst_appsupervisor" ) );
+
+    QSettings::setDefaultFormat( QSettings::IniFormat );
+    QSettings::setPath( QSettings::IniFormat, QSettings::UserScope, g_settingsDir->path() );
+
+    {
+        QSettings settings;
+        settings.clear();
+        settings.sync();
+    }
+}
+
+void tst_AppSupervisor::cleanupTestCase()
+{
+    g_settingsDir.reset();
+}
 
 void tst_AppSupervisor::appVersion_roundTripsExplicitValues()
 {

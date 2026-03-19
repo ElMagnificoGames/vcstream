@@ -1,0 +1,73 @@
+= LocalDeviceCatalogue
+
+== Description
+
+I am a local device catalogue.
+I provide a snapshot of what the current machine reports as available cameras, microphones, audio output devices, screens, and (where supported) capturable windows.
+
+I collaborate with UI code that displays a local device catalogue for debugging, and with Qt Multimedia and Qt GUI facilities for enumeration.
+I do not start capture, I do not request permissions, and I do not decide which devices should be used.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by `AppSupervisor` and exposed to QML.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+Properties (QML-facing):
+- `QVariantList screens` is a list of `QVariantMap` values. Each map contains at least:
+  - `name` (`QString`)
+  - `geometry` (`QRect`)
+  - `availableGeometry` (`QRect`)
+  - `devicePixelRatio` (`double`)
+
+- `QVariantList cameras` is a list of `QVariantMap` values. Each map contains at least:
+  - `name` (`QString`) user-facing device description
+  - `id` (`QString`) stable identifier string (hex-encoded bytes)
+  - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultVideoInput()`
+
+- `QVariantList microphones` is a list of `QVariantMap` values. Each map contains at least:
+  - `name` (`QString`) user-facing device description
+  - `id` (`QString`) stable identifier string (hex-encoded bytes)
+  - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultAudioInput()`
+
+- `QVariantList audioOutputs` is a list of `QVariantMap` values. Each map contains at least:
+  - `name` (`QString`) user-facing device description
+  - `id` (`QString`) stable identifier string (hex-encoded bytes)
+  - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultAudioOutput()`
+
+- `QVariantList windows` is a list of `QVariantMap` values. Each map contains at least:
+  - `name` (`QString`) window description
+
+- `QString windowCaptureStatus` is an explanatory message when window enumeration is unavailable, otherwise an empty string.
+
+Commands:
+- `void refresh()` re-enumerates all device categories and updates the properties.
+
+Signals:
+- `screensChanged()` is emitted when `screens` changes.
+- `camerasChanged()` is emitted when `cameras` changes.
+- `microphonesChanged()` is emitted when `microphones` changes.
+- `audioOutputsChanged()` is emitted when `audioOutputs` changes.
+- `windowsChanged()` is emitted when `windows` changes.
+- `windowCaptureStatusChanged()` is emitted when `windowCaptureStatus` changes.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+
+Errors:
+- No explicit failure reporting.
+- Unavailable device categories are represented by empty lists and a status message.
+
+== Implementation details
+
+- Screens are sourced from `QGuiApplication::screens()`.
+- Camera and audio devices are sourced from `QMediaDevices`.
+- Capturable windows are sourced from `QWindowCapture` where Qt provides the API; otherwise `windowCaptureStatus` reports the limitation.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore, QtGui, QtMultimedia).

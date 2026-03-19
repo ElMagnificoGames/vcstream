@@ -10,6 +10,14 @@ Current persisted settings (skeleton):
   - `ui/mainWindow/width`
   - `ui/mainWindow/height`
 
+- Preferences:
+  - `ui/profile/displayName`
+  - `ui/theme/mode`
+  - `ui/theme/accent`
+  - `ui/theme/customAccentLightness`
+  - `ui/theme/customAccentChroma`
+  - `ui/theme/customAccentHueDegrees`
+
 If the window position is not present (or is ignored), the app chooses a default placement centred within the current screen's `availableGeometry()`.
 
 ## Storage location

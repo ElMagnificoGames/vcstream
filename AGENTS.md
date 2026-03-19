@@ -9,6 +9,7 @@
 - `docs/MODULES.md` defines the initial module boundaries and dependency direction.
 - `docs/OVERVIEW.md` provides onboarding information to understand this project and its goals.
 - `docs/ROADMAP.md` provides a detailed account of what is to be done (broken down into manageable tasks).
+- `docs/STYLE.md` defines the app-owned visual design language and theme-system expectations for authored UI.
 - `docs/SETTINGS.md` documents settings persistence and storage location.
 
 ## Tooling
@@ -119,10 +120,11 @@ User-facing UI labels and control names should describe user intent in simple, n
 
 ### Colours and themes
 
-Future versions of this application may allow the user to choose a Qt theme/style. UI colours must therefore be theme-aware.
+This application now has an app-owned styling direction documented in `docs/STYLE.md`. Future versions may still allow the user to choose a Qt theme/style, but authored UI should not rely on the desktop style to provide the application's visual identity.
 
-- Do not hardcode light/dark UI colours for surfaces, text, or borders (for example: `#ffffff`, `#000000`).
-- Prefer palette-derived colours from the active style (for example: `Control.palette`, `ApplicationWindow.palette`, or `SystemPalette`).
+- Do not hardcode light/dark UI colours for surfaces, text, or borders outside the shared token system (for example: `#ffffff`, `#000000`).
+- Prefer shared app theme tokens and wrapper components for authored controls; use the active palette/system palette as an input/reference layer rather than the sole styling mechanism.
+- End-user customisation must remain token-driven and coherent (for example: mode, accent, density, motion, and future style variants), not ad-hoc per-widget colour tweaking.
 - Do not use `opacity` on containers that contain text/controls (it dims children and reduces readability); prefer alpha in the background `color` instead.
 
 ### Interaction stability (avoid oscillation)
@@ -143,6 +145,12 @@ QML warnings are treated as test failures.
 - Prefer testing real user flows (start screen -> join/host -> disconnect) rather than directly poking internal state.
 - Avoid deprecated implicit signal parameter injection in QML handlers. Prefer explicit function parameters (for example: `onPressed: function( mouse ) { ... }`).
 - Ensure the warning gate actually intercepts warnings: capture both `QQmlApplicationEngine::warnings` and Qt message output, and install message handlers within the QtTest lifecycle (for example: `initTestCase` / `cleanupTestCase`).
+
+Smoke test policy (project-specific):
+- `apps/unittests/qml/tst_qml_ui.cpp` performs an automatic interaction sweep.
+- Any interactive control authored under `qrc:/qml/*` MUST have a stable `objectName` so the sweep can report and reproduce failures.
+- The sweep hovers all interactive controls and clicks most controls.
+- For controls that are unsafe or non-deterministic to auto-click in CI (engine reload, external links, process exit, etc.), set `property bool testSkipActivate: true` on the control; the sweep will still hover it.
 
 ## British spelling
 

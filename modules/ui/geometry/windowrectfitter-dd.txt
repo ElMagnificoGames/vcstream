@@ -18,6 +18,19 @@ State model:
 - `FitResult fit( const QRect &desired, const QVector<QRect> &allowedRects, const QSize &minimumSize, int titleBarHeight, int titleBarGripWidth )`
   returns a repaired window rectangle.
 
+Result:
+- `FitResult` contains:
+  - `QRect rect` the chosen output rectangle.
+  - `Outcome outcome` a coarse description of what was changed.
+  - `bool fullyContained` whether `rect` is fully contained within the union of `allowedRects`.
+
+Outcome values:
+- `Unchanged`: `rect == desired`.
+- `Moved`: size is unchanged, position changed.
+- `Resized`: size changed (may also move).
+- `Degraded`: even `minimumSize` cannot be fully contained; best-effort placement.
+- `Fallback`: allowed region empty; returns a safe fallback rectangle.
+
 Arguments:
 - `desired` is the requested window rectangle in global coordinates.
 - `allowedRects` describes the allowed screen region as a set of rectangles (typically per-screen `availableGeometry()`).

@@ -1,0 +1,68 @@
+= OklchColour
+
+== Description
+
+I am an OKLCH to sRGB conversion utility.
+I convert perceptual OKLCH colours into sRGB `QColor` values, and I can fit an OKLCH colour into the sRGB gamut by reducing chroma.
+
+I collaborate with UI theming and colour picker code that needs perceptually reasonable interpolation and predictable clamping.
+I do not implement a UI, I do not manage palettes, and I do not attempt to preserve out-of-gamut intent beyond reducing chroma.
+
+State model:
+- Thread affinity: any thread.
+- Lifetime/ownership: pure functions.
+- Re-entrancy: re-entrant.
+
+== Public interface
+
+Types:
+- `oklchcolour::Oklch` is a simple OKLCH triple:
+  - `lightness` is OKLab lightness in [0,1].
+  - `chroma` is `sqrt( a*a + b*b )` in OKLab space (practical sRGB gamut is smaller).
+  - `hueDegrees` is `atan2( b, a )` in degrees.
+
+  Normalisation:
+  - `clampOklch()` clamps `lightness` to [0,1], clamps `chroma` to [0,1], and wraps `hueDegrees` to [0,360).
+
+Functions:
+- `Oklch clampOklch( const Oklch &oklch )` clamps lightness/chroma and wraps hue.
+
+- `bool isInSrgbGamut( const Oklch &oklch )` reports whether the OKLCH colour converts to linear sRGB within [0,1] on all channels.
+
+  Notes:
+  - The test is performed in linear sRGB before sRGB transfer encoding.
+
+- `Oklch fitToSrgbGamut( const Oklch &oklch )` fits the colour into the sRGB gamut.
+
+  Behaviour:
+  - Preserves `lightness` and `hueDegrees`.
+  - Reduces `chroma` only.
+  - If the input is already in gamut, returns the clamped input.
+
+  Complexity:
+  - O(1); uses a fixed-iteration binary search on chroma.
+
+- `QColor toSrgbFitted( const Oklch &oklch )` converts an OKLCH colour to an in-gamut sRGB `QColor`.
+
+  Behaviour:
+  - Applies `fitToSrgbGamut()`.
+  - Converts OKLab to linear sRGB, then applies the sRGB transfer curve.
+  - Returns an opaque colour (alpha = 1.0).
+
+Thread safety:
+- Thread-safe: Yes.
+- Re-entrant: Yes.
+
+Errors:
+- No explicit failure reporting.
+- Inputs outside the documented ranges are clamped/wrapped.
+
+== Implementation details
+
+- Uses OKLab/OKLCH conversion with the standard OKLab matrices.
+- Gamut fitting is a binary search on chroma.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtGui).

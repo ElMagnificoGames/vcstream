@@ -141,13 +141,17 @@ Never write for the happy path only.
 **Discussion guidance:**
 This should cover:
 - theme/style selection
-- accessibility options (e.g. UI scale, reduce motion)
+- accessibility options (e.g. UI scale)
 - default values (e.g. display name, preferred webcam)
 - a local monitor view that can enumerate and refresh:
   - cameras, microphones
   - screens and windows
   - audio output devices (where supported)
   - any other locally available inputs/outputs the app can use as sinks/sources
+
+**Victorian mode follow-ups (styling):**
+- Bundle a bookish serif for headings and a highly legible body font; wire them into theme tokens.
+- Add an optional subtle paper-grain overlay (no faux ageing; keep it clean and low-contrast).
 
 **Completion criteria:**
 - preferences entry point exists in the app shell UI

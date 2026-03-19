@@ -9,10 +9,13 @@ target_link_libraries( tst_qml_ui PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::Multimedia
     Qt6::Test
     vcstream_app_defence
     vcstream_app_lifecycle
     vcstream_ui_placement
+    vcstream_ui_colour
+    vcstream_ui_theme
 )
 
 add_test( NAME tst_qml_ui COMMAND tst_qml_ui )

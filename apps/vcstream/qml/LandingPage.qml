@@ -2,79 +2,155 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-Item {
+Page {
     id: root
     objectName: "landingPage"
+    padding: 0
 
     property var uiMetrics
+    property var appPalette
+    property var theme
 
-    SystemPalette {
-        id: pal
+    SystemPalette { id: sysPal }
+    readonly property var pal: ( appPalette ? appPalette : sysPal )
+
+    readonly property color windowColour: ( theme ? theme.windowColour : pal.window )
+    readonly property color textColour: ( theme ? theme.textColour : pal.text )
+    readonly property color accentColour: ( theme ? theme.accentColour : pal.highlight )
+    readonly property color accentTextColour: ( theme ? theme.highlightedTextColour : pal.highlightedText )
+    readonly property color resolvedHighlightColour: palette.highlight
+    readonly property color resolvedButtonColour: palette.button
+
+    palette.window: windowColour
+    palette.windowText: textColour
+    palette.base: ( theme ? theme.baseColour : pal.base )
+    palette.alternateBase: ( theme ? theme.alternateBaseColour : pal.alternateBase )
+    palette.text: textColour
+    palette.button: ( theme ? theme.buttonColour : pal.button )
+    palette.buttonText: textColour
+    palette.placeholderText: ( theme ? theme.placeholderTextColour : pal.placeholderText )
+    palette.light: ( theme ? theme.lightColour : pal.light )
+    palette.midlight: ( theme ? theme.midlightColour : pal.midlight )
+    palette.dark: ( theme ? theme.darkColour : pal.dark )
+    palette.mid: ( theme ? theme.midColour : pal.mid )
+    palette.shadow: ( theme ? theme.shadowColour : pal.shadow )
+    palette.highlight: accentColour
+    palette.highlightedText: accentTextColour
+    palette.link: accentColour
+    palette.linkVisited: ( theme ? theme.linkVisitedColour : pal.linkVisited )
+    palette.toolTipBase: ( theme ? theme.toolTipBaseColour : pal.toolTipBase )
+    palette.toolTipText: ( theme ? theme.toolTipTextColour : pal.toolTipText )
+
+    background: Rectangle {
+        color: ( theme ? theme.paperColour : windowColour )
     }
 
     signal joinRequested()
     signal hostRequested()
+    signal preferencesRequested()
+    signal hoverHelpRequested( Item target, string text )
+    signal hoverHelpHideRequested()
 
-    Rectangle {
-        anchors.fill: parent
-        color: pal.window
+    VcToolButton {
+        id: preferencesButton
+        objectName: "landingPreferencesButton"
+        theme: root.theme
+        tone: "neutral"
+
+        hoverEnabled: true
+
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 10
+        z: 1000
+
+        text: "Preferences"
+        icon.name: "preferences-system"
+        display: ( appSupervisor && appSupervisor.themeIconAvailable( icon.name ) ? AbstractButton.IconOnly : AbstractButton.TextOnly )
+
+        onHoveredChanged: {
+            if ( hovered ) {
+                root.hoverHelpRequested( preferencesButton, "Open preferences." )
+            } else {
+                root.hoverHelpHideRequested()
+            }
+        }
+
+        onClicked: {
+            root.preferencesRequested()
+        }
     }
 
-    ColumnLayout {
+    VcPanel {
         anchors.centerIn: parent
         width: Math.min( parent.width * 0.85, 520 )
-        spacing: 16
+        theme: root.theme
+        accentRole: "tertiary"
 
-        Label {
-            text: "vcstream"
-            font.pixelSize: 28
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
-        }
+        ColumnLayout {
+            width: parent.width
+            spacing: ( theme ? theme.spaceBase : 16 )
 
-        Label {
-            text: "Choose how you want to start."
-            opacity: 0.75
-            wrapMode: Text.Wrap
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
-        }
-
-        Button {
-            objectName: "joinRoomButton"
-            text: "Join room"
-            Layout.fillWidth: true
-            Layout.preferredHeight: 64
-            font.pixelSize: 18
-
-            onClicked: {
-                root.joinRequested()
+            Label {
+                text: "vcstream"
+                font.pixelSize: 28
+                color: textColour
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
             }
-        }
 
-        Button {
-            objectName: "hostRoomButton"
-            text: "Host room"
-            Layout.fillWidth: true
-            Layout.preferredHeight: 64
-            font.pixelSize: 18
-
-            onClicked: {
-                root.hostRequested()
+            Label {
+                text: "Choose how you want to start."
+                color: ( theme ? theme.metaTextColour : textColour )
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
             }
-        }
 
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 8
-        }
+            VcButton {
+                id: joinRoomButton
+                objectName: "joinRoomButton"
+                theme: root.theme
+                tone: "primary"
+                text: "Join room"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                font.pixelSize: 18
 
-        Label {
-            text: "You can change this later."
-            opacity: 0.65
-            wrapMode: Text.Wrap
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
+                onClicked: {
+                    root.joinRequested()
+                }
+
+            }
+
+            VcButton {
+                id: hostRoomButton
+                objectName: "hostRoomButton"
+                theme: root.theme
+                tone: "secondary"
+                text: "Host room"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                font.pixelSize: 18
+
+                onClicked: {
+                    root.hostRequested()
+                }
+
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 4
+            }
+
+            Label {
+                text: "You can change this later."
+                color: ( theme ? theme.metaTextColour : textColour )
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            }
         }
     }
 }

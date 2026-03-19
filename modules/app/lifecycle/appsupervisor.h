@@ -10,6 +10,8 @@ class AppSupervisor final : public QObject
     Q_PROPERTY( QString appVersion READ appVersion CONSTANT )
     Q_PROPERTY( bool joinRoomEnabled READ joinRoomEnabled WRITE setJoinRoomEnabled NOTIFY joinRoomEnabledChanged )
     Q_PROPERTY( bool hostRoomEnabled READ hostRoomEnabled WRITE setHostRoomEnabled NOTIFY hostRoomEnabledChanged )
+    Q_PROPERTY( QObject *preferences READ preferences CONSTANT )
+    Q_PROPERTY( QObject *deviceCatalogue READ deviceCatalogue CONSTANT )
 
 public:
     explicit AppSupervisor( QObject *parent = nullptr );
@@ -22,6 +24,11 @@ public:
     bool hostRoomEnabled() const;
     void setHostRoomEnabled( bool enabled );
 
+    QObject *preferences() const;
+    QObject *deviceCatalogue() const;
+
+    Q_INVOKABLE bool themeIconAvailable( const QString &name ) const;
+
 Q_SIGNALS:
     void joinRoomEnabledChanged();
     void hostRoomEnabledChanged();
@@ -32,6 +39,9 @@ public Q_SLOTS:
 private:
     bool m_joinRoomEnabled;
     bool m_hostRoomEnabled;
+
+    QObject *m_preferences;
+    QObject *m_deviceCatalogue;
 };
 
 #endif

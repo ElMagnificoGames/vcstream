@@ -11,22 +11,36 @@ Item {
     property int maxWidth: 360
     property int margin: 10
     property int offsetY: 6
+    property var appPalette
+    property var theme
 
     visible: false
     z: 10000
 
-    SystemPalette {
-        id: pal
-    }
+    SystemPalette { id: sysPal }
+    readonly property var pal: ( appPalette ? appPalette : sysPal )
+
+    readonly property color baseColour: ( theme ? theme.baseColour : pal.base )
+    readonly property color borderColour: ( theme ? theme.frameColour : pal.mid )
+    readonly property color textColour: ( theme ? theme.textColour : pal.text )
 
     width: Math.min( maxWidth, textItem.implicitWidth + 16 )
     height: textItem.implicitHeight + 16
 
     Rectangle {
         anchors.fill: parent
-        radius: 6
-        color: pal.base
-        border.color: pal.mid
+        radius: ( theme ? theme.panelRadius : 6 )
+        color: ( theme ? theme.panelColour : baseColour )
+        border.color: borderColour
+        border.width: ( theme ? theme.lineMed : 1 )
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: ( theme ? theme.insetGap : 3 )
+        radius: Math.max( 0, ( theme ? theme.panelRadius : 6 ) - 2 )
+        color: "transparent"
+        border.color: ( theme ? theme.frameInnerColour : borderColour )
         border.width: 1
     }
 
@@ -36,7 +50,7 @@ Item {
         anchors.margins: 8
         text: root.text
         wrapMode: Text.Wrap
-        color: pal.text
+        color: textColour
         width: Math.min( root.maxWidth - 16, implicitWidth )
     }
 

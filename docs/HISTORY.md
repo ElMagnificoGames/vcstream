@@ -230,3 +230,94 @@
   - `apps/unittests/app/defence/CMakeLists.txt`
 - Policy update:
   - `docs/CODE-QT6.md`
+
+## Task 1.4 — Add Preferences UI (settings + local device catalogue)
+
+### What
+
+- Added a Preferences overlay reachable from both the landing page and the main shell toolbar (gear icon with text fallback).
+- Implemented a small preferences store (`AppPreferences`) backed by Qt `QSettings`.
+- Implemented a local device catalogue (`LocalDeviceCatalogue`) that can enumerate and refresh without restarting the app:
+  - screens
+  - cameras
+  - microphones
+  - audio output devices
+  - capturable windows (when supported by the Qt build)
+- Wired preferences persistence into orderly shutdown and ensured UI closes persist current edits.
+- Switched the Preferences navigation to a left-hand category list (Discord-style) instead of top tabs.
+- Added an in-app theme system (System/Light/Dark + accent colours) that applies immediately.
+- Added a custom accent colour picker based on the OKLCH colour model (hue slider + chroma/lightness plane).
+- Extended the QML UI smoke test to open Preferences from the landing page and from the shell, switch categories, refresh the device catalogue, and close the overlay without emitting warnings.
+
+### Why
+
+- The roadmap needs a stable home for user preferences before capture and networking services arrive.
+- A local “what does my machine see?” catalogue reduces future debugging time for device enumeration, permissions, and platform differences.
+
+### Acceptance criteria
+
+- Preferences entry point exists in the app shell UI.
+- At least one preference is persisted and restored (beyond window placement).
+- Device catalogue can refresh without restart and does not require starting capture.
+- Failure/absence cases (no devices, missing window-capture support) are represented without crashing.
+
+### Decisions
+
+- Persistence: store preferences under `ui/` keys in `QSettings` alongside existing UI placement settings.
+- Theme implementation: do not use `QQuickStyle` for theming; instead derive an application palette from the active style/system palette and apply mode/accent adjustments at the `ApplicationWindow.palette` level.
+- Custom accent colour: use OKLCH and clamp colours to the sRGB gamut by reducing chroma.
+- Capturable window enumeration: when supported, report only the window description (no stable OS id is provided by the current Qt API).
+
+### Technical notes
+
+- Preferences UI:
+  - Overlay: `apps/vcstream/qml/PreferencesOverlay.qml`
+  - Entry points: `apps/vcstream/qml/LandingPage.qml`, `apps/vcstream/qml/ShellPage.qml`
+  - Overlay hosting and reopen intent: `apps/vcstream/qml/main.qml`
+  - Resource wiring: `apps/vcstream/qml/qml.qrc`
+- Preferences persistence:
+  - Store: `modules/app/settings/apppreferences.h`, `modules/app/settings/apppreferences.cpp`, `modules/app/settings/apppreferences-dd.txt`
+  - Theme plumbing: `apps/vcstream/qml/main.qml`
+- Device catalogue:
+  - Service: `modules/app/devices/localdevicecatalogue.h`, `modules/app/devices/localdevicecatalogue.cpp`, `modules/app/devices/localdevicecatalogue-dd.txt`
+  - Enumeration sources: `QGuiApplication::screens()`, `QMediaDevices`, and (when available) `QWindowCapture`.
+- Wiring to QML:
+  - `AppSupervisor` now owns and exposes `preferences` and `deviceCatalogue` objects:
+    - `modules/app/lifecycle/appsupervisor.h`, `modules/app/lifecycle/appsupervisor.cpp`, `modules/app/lifecycle/appsupervisor-dd.txt`
+  - `AppSupervisor` also provides theme-icon availability checks for QML.
+- Tests:
+  - QML warning gate extended: `apps/unittests/qml/tst_qml_ui.cpp`
+  - `tst_appsupervisor` now isolates `QSettings` to a temporary directory: `apps/unittests/app/lifecycle/tst_appsupervisor.cpp`
+- Build wiring:
+  - Added Qt Multimedia dependency: `CMakeLists.txt`, `apps/vcstream/CMakeLists.txt`, `apps/unittests/qml/CMakeLists.txt`, `apps/unittests/app/lifecycle/CMakeLists.txt`
+- Theme utilities:
+  - OKLCH conversion: `modules/ui/colour/oklchcolour.h`, `modules/ui/colour/oklchcolour.cpp`, `modules/ui/colour/oklchutil.h`, `modules/ui/colour/oklchutil.cpp`
+  - Picker images: `modules/ui/theme/accentimageprovider.h`, `modules/ui/theme/accentimageprovider.cpp`
+- Settings documentation updated:
+  - `docs/SETTINGS.md`
+
+### Temporary note (ongoing UI issues)
+
+The user reports the following issues in a real interactive run (not reproduced by `tst_qml_ui` under `QT_QPA_PLATFORM=offscreen`). These need follow-up:
+
+- Preferences overlay category switching/rendering:
+  - Symptoms: Devices category shows an empty right-hand pane (no header, no frames); a Refresh button appears on the wrong category.
+  - Repro: open Preferences, click the left “Devices” category.
+  - Suspects: QML layout/visibility logic in `apps/vcstream/qml/PreferencesOverlay.qml` and/or state synchronisation between `apps/vcstream/qml/main.qml` and `apps/vcstream/qml/PreferencesOverlay.qml`.
+
+- Accent theme propagation:
+  - Symptoms: the accent swatch changes, but other controls that normally use the system accent keep using the system accent instead of the chosen accent.
+  - Key requirement: do not manually apply accent colour per-widget; accent must propagate through palette/style as intended.
+  - Suspects: palette inheritance through `StackView` pages rooted in plain `Item` trees; some controls may not be inheriting `ApplicationWindow.palette` in the live style/plugin.
+
+- Light theme inconsistencies:
+  - Symptoms: some surfaces remain dark and some text remains light when Light mode is selected.
+  - Suspects: incomplete palette role overrides and/or palette inheritance not reaching all controls.
+
+Notes for the next agent:
+- `tst_qml_ui` currently passes but does not guarantee style/plugin parity with the user's desktop (for example KDE/Breeze).
+- Consider adding a minimal on-screen debug readout (behind a temporary flag) of:
+  - `PreferencesOverlay.currentCategoryIndex`
+  - `appSupervisor.preferences.themeMode` / `accent`
+  - `ApplicationWindow.palette.highlight`
+  to confirm whether the state changes are not occurring vs not being applied by the style.

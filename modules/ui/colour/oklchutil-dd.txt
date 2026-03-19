@@ -1,0 +1,38 @@
+= OklchUtil
+
+== Description
+
+I am a QML-facing OKLCH conversion adaptor.
+I expose OKLCH conversion as invokable functions returning `QColor`, suitable for theme preview and picker UI.
+
+I collaborate with QML UI code and the underlying OKLCH conversion utilities.
+I do not store preferences, I do not render images, and I do not apply palettes.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: typically owned by the application and exposed to the QML context.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `QColor oklchToSrgbFitted( double lightness, double chroma, double hueDegrees ) const` converts an OKLCH triple into an in-gamut sRGB colour.
+
+  Arguments:
+  - `lightness`: OKLab lightness in [0,1] (clamped).
+  - `chroma`: OKLab chroma in [0,1] (clamped; practical sRGB gamut is smaller).
+  - `hueDegrees`: hue in degrees (wrapped to [0,360)).
+
+  Returns:
+  - an opaque sRGB `QColor` fitted into the sRGB gamut by reducing chroma.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+
+Errors:
+- No explicit failure reporting; values are clamped.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore, QtGui).

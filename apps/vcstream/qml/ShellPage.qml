@@ -2,21 +2,53 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-Item {
+Page {
     id: root
     objectName: "shellPage"
+    padding: 0
 
     property var uiMetrics
+    property var appPalette
+    property var theme
 
     SystemPalette {
-        id: pal
+        id: sysPal
     }
+
+    readonly property var pal: ( appPalette ? appPalette : sysPal )
 
     readonly property color tintSoft: Qt.rgba( pal.text.r, pal.text.g, pal.text.b, 0.06 )
     readonly property color tintSofter: Qt.rgba( pal.text.r, pal.text.g, pal.text.b, 0.04 )
     readonly property color scrimColour: Qt.rgba( pal.shadow.r, pal.shadow.g, pal.shadow.b, 0.35 )
+    readonly property color resolvedHighlightColour: palette.highlight
+    readonly property color resolvedButtonColour: palette.button
+
+    palette.window: ( theme ? theme.windowColour : pal.window )
+    palette.windowText: ( theme ? theme.windowTextColour : pal.windowText )
+    palette.base: ( theme ? theme.baseColour : pal.base )
+    palette.alternateBase: ( theme ? theme.alternateBaseColour : pal.alternateBase )
+    palette.text: ( theme ? theme.textColour : pal.text )
+    palette.button: ( theme ? theme.buttonColour : pal.button )
+    palette.buttonText: ( theme ? theme.buttonTextColour : pal.buttonText )
+    palette.placeholderText: ( theme ? theme.placeholderTextColour : pal.placeholderText )
+    palette.light: ( theme ? theme.lightColour : pal.light )
+    palette.midlight: ( theme ? theme.midlightColour : pal.midlight )
+    palette.dark: ( theme ? theme.darkColour : pal.dark )
+    palette.mid: ( theme ? theme.midColour : pal.mid )
+    palette.shadow: ( theme ? theme.shadowColour : pal.shadow )
+    palette.highlight: ( theme ? theme.accentColour : pal.highlight )
+    palette.highlightedText: ( theme ? theme.highlightedTextColour : pal.highlightedText )
+    palette.link: ( theme ? theme.linkColour : pal.link )
+    palette.linkVisited: ( theme ? theme.linkVisitedColour : pal.linkVisited )
+    palette.toolTipBase: ( theme ? theme.toolTipBaseColour : pal.toolTipBase )
+    palette.toolTipText: ( theme ? theme.toolTipTextColour : pal.toolTipText )
+
+    background: Rectangle {
+        color: ( theme ? theme.paperColour : pal.window )
+    }
 
     signal disconnectRequested()
+    signal preferencesRequested()
 
     property int selectedSourceIndex: -1
     property string selectedSourceName: ""
@@ -39,6 +71,7 @@ Item {
         sourceInspectorOpen = false
     }
 
+
     function setSelectedSourceExportEnabled( enabled ) {
         if ( selectedSourceIndex < 0 ) {
             return
@@ -57,7 +90,9 @@ Item {
     HelpTip {
         id: hoverHelp
         overlay: overlayLayer
+        appPalette: root.appPalette
     }
+
 
     Timer {
         id: hoverHelpTimer
@@ -86,16 +121,34 @@ Item {
 
         ToolBar {
             Layout.fillWidth: true
-            contentHeight: 44
+            contentHeight: 56
+
+            background: Rectangle {
+                color: ( theme ? theme.panelColour : pal.base )
+                border.color: ( theme ? theme.frameColour : pal.mid )
+                border.width: ( theme ? theme.lineMed : 1 )
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: ( theme ? theme.insetGap : 3 )
+                    color: "transparent"
+                    border.color: ( theme ? theme.frameInnerColour : pal.midlight )
+                    border.width: 1
+                }
+            }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 10
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                anchors.topMargin: 6
+                anchors.bottomMargin: 6
                 spacing: 12
 
                 Label {
                     text: "vcstream"
                     font.pixelSize: 18
+                    color: ( theme ? theme.textColour : pal.text )
                     Layout.alignment: Qt.AlignVCenter
                 }
 
@@ -103,9 +156,11 @@ Item {
                     Layout.fillWidth: true
                 }
 
-                Button {
+                VcButton {
                     id: disconnectButton
                     objectName: "disconnectButton"
+                    theme: root.theme
+                    tone: "danger"
                     text: "Disconnect"
                     hoverEnabled: true
 
@@ -122,6 +177,31 @@ Item {
                         root.disconnectRequested()
                     }
                 }
+
+                VcToolButton {
+                    id: preferencesButton
+                    objectName: "preferencesButton"
+                    theme: root.theme
+                    tone: "neutral"
+                    hoverEnabled: true
+
+                    text: "Preferences"
+                    icon.name: "preferences-system"
+                    display: ( appSupervisor && appSupervisor.themeIconAvailable( icon.name ) ? AbstractButton.IconOnly : AbstractButton.TextOnly )
+
+                    onHoveredChanged: {
+                        if ( hovered ) {
+                            root.showHelp( preferencesButton, "Open preferences." )
+                        } else {
+                            root.hideHelp()
+                        }
+                    }
+
+                    onClicked: {
+                        root.hideHelp()
+                        root.preferencesRequested()
+                    }
+                }
             }
         }
 
@@ -130,56 +210,60 @@ Item {
             Layout.fillHeight: true
             orientation: Qt.Horizontal
 
-            Pane {
+            Item {
                 SplitView.preferredWidth: 260
                 SplitView.minimumWidth: ( uiMetrics ? uiMetrics.shellLeftPaneMinWidth : 220 )
-                padding: 10
 
                 ColumnLayout {
                     anchors.fill: parent
+                    anchors.margins: 10
                     spacing: 10
 
-                    Frame {
+                    VcPanel {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        theme: root.theme
+                        accentRole: "secondary"
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
+                            width: parent.width
                             spacing: 8
 
                             Label {
                                 text: "Participants"
                                 font.pixelSize: 14
+                                color: ( theme ? theme.textColour : pal.text )
                             }
 
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 radius: 6
-                                color: tintSoft
+                                color: ( theme ? theme.panelInsetColour : tintSoft )
 
                                 Label {
                                     anchors.centerIn: parent
                                     text: "(placeholder)"
-                                    opacity: 0.65
+                                    color: ( theme ? theme.metaTextColour : pal.mid )
                                 }
                             }
                         }
                     }
 
-                    Frame {
+                    VcPanel {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 200
+                        theme: root.theme
+                        accentRole: "tertiary"
 
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
+                            width: parent.width
                             spacing: 8
 
                             Label {
                                 text: "Sources"
                                 font.pixelSize: 14
+                                color: ( theme ? theme.textColour : pal.text )
                             }
 
                             ListModel {
@@ -195,7 +279,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 radius: 6
-                                color: tintSoft
+                                color: ( theme ? theme.panelInsetColour : tintSoft )
 
                                 ListView {
                                     anchors.fill: parent
@@ -245,7 +329,7 @@ Item {
 
                             Label {
                                 text: "Browser Export is placeholder-only until the HTTP server exists."
-                                opacity: 0.65
+                                color: ( theme ? theme.metaTextColour : pal.mid )
                                 wrapMode: Text.Wrap
                                 Layout.fillWidth: true
                             }
@@ -254,13 +338,15 @@ Item {
                 }
             }
 
-            Pane {
+            Item {
                 SplitView.preferredWidth: 520
                 SplitView.minimumWidth: ( uiMetrics ? uiMetrics.shellCentrePaneMinWidth : 320 )
-                padding: 10
 
-                Frame {
+                VcPanel {
                     anchors.fill: parent
+                    anchors.margins: 10
+                    theme: root.theme
+                    accentRole: "primary"
 
                     Item {
                         id: stageRoot
@@ -270,13 +356,13 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             radius: 10
-                            color: tintSofter
+                            color: ( theme ? theme.panelInsetColour : tintSofter )
 
                             Label {
                                 anchors.centerIn: parent
                                 text: "Stage / Participant Grid"
                                 font.pixelSize: 18
-                                opacity: 0.75
+                                color: ( theme ? theme.metaTextColour : pal.mid )
                             }
                         }
 
@@ -299,16 +385,14 @@ Item {
                                 }
                             }
 
-                            Rectangle {
+                            VcPanel {
                                 id: sourceInspectorPanel
                                 objectName: "sourceInspectorPanel"
                                 anchors.centerIn: parent
                                 width: Math.min( parent.width * 0.92, 560 )
                                 height: Math.min( parent.height * 0.85, 420 )
-                                radius: 10
-                                color: pal.base
-                                border.color: pal.mid
-                                border.width: 1
+                                theme: root.theme
+                                accentRole: "secondary"
 
                                 MouseArea {
                                     anchors.fill: parent
@@ -320,7 +404,6 @@ Item {
 
                                 ColumnLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 14
                                     spacing: 12
 
                                     RowLayout {
@@ -333,10 +416,10 @@ Item {
                                             elide: Text.ElideRight
                                         }
 
-                                        ToolButton {
+                                        VcCloseButton {
                                             id: closeInspectorButton
                                             objectName: "sourceInspectorCloseButton"
-                                            text: "X"
+                                            theme: root.theme
                                             onClicked: {
                                                 root.closeSourceInspector()
                                             }
@@ -347,7 +430,7 @@ Item {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: 8
-                                        color: tintSoft
+                                        color: ( theme ? theme.panelInsetColour : tintSoft )
 
                                         Label {
                                             anchors.centerIn: parent
@@ -356,12 +439,13 @@ Item {
                                         }
                                     }
 
-                                    Frame {
+                                    VcPanel {
                                         Layout.fillWidth: true
+                                        theme: root.theme
+                                        accentRole: "tertiary"
 
                                         ColumnLayout {
-                                            anchors.fill: parent
-                                            anchors.margins: 10
+                                            width: parent.width
                                             spacing: 6
 
                                             Label {
@@ -387,9 +471,10 @@ Item {
                                         Layout.fillWidth: true
                                         spacing: 12
 
-                                        CheckBox {
+                                        VcCheckBox {
                                             id: inspectorExportToggle
                                             objectName: "sourceInspectorBrowserExportToggle"
+                                            theme: root.theme
                                             text: "Browser Export"
                                             hoverEnabled: true
                                             checked: root.selectedSourceExportEnabled
@@ -419,21 +504,22 @@ Item {
                 }
             }
 
-            Pane {
+            Item {
                 SplitView.preferredWidth: 320
                 SplitView.minimumWidth: ( uiMetrics ? uiMetrics.shellRightPaneMinWidth : 260 )
-                padding: 10
 
                 ColumnLayout {
                     anchors.fill: parent
+                    anchors.margins: 10
                     spacing: 10
 
-                    TabBar {
+                    VcTabBar {
                         id: rightTabs
                         Layout.fillWidth: true
+                        theme: root.theme
 
-                        TabButton { text: "Chat" }
-                        TabButton { text: "Diagnostics" }
+                        VcTabButton { objectName: "rightTabChat"; text: "Chat"; theme: root.theme }
+                        VcTabButton { objectName: "rightTabDiagnostics"; text: "Diagnostics"; theme: root.theme }
                     }
 
                     StackLayout {
@@ -441,65 +527,70 @@ Item {
                         Layout.fillHeight: true
                         currentIndex: rightTabs.currentIndex
 
-                        Frame {
+                        VcPanel {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
+                            theme: root.theme
+                            accentRole: "secondary"
 
                             ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
+                                width: parent.width
                                 spacing: 8
 
                                 Label {
                                     text: "Chat"
                                     font.pixelSize: 14
+                                    color: ( theme ? theme.textColour : pal.text )
                                 }
 
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     radius: 6
-                                    color: tintSoft
+                                    color: ( theme ? theme.panelInsetColour : tintSoft )
 
                                     Label {
                                         anchors.centerIn: parent
                                         text: "(placeholder)"
-                                        opacity: 0.65
+                                        color: ( theme ? theme.metaTextColour : pal.mid )
                                     }
                                 }
 
-                                TextField {
+                                VcTextField {
                                     Layout.fillWidth: true
+                                    theme: root.theme
                                     placeholderText: "Type a message (placeholder)"
                                     enabled: false
                                 }
                             }
                         }
 
-                        Frame {
+                        VcPanel {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
+                            theme: root.theme
+                            accentRole: "tertiary"
 
                             ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
+                                width: parent.width
                                 spacing: 8
 
                                 Label {
                                     text: "Diagnostics"
                                     font.pixelSize: 14
+                                    color: ( theme ? theme.textColour : pal.text )
                                 }
 
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     radius: 6
-                                    color: tintSoft
+                                    color: ( theme ? theme.panelInsetColour : tintSoft )
 
                                     Label {
                                         anchors.centerIn: parent
                                         text: "(placeholder)"
-                                        opacity: 0.65
+                                        color: ( theme ? theme.metaTextColour : pal.mid )
                                     }
                                 }
                             }
@@ -513,6 +604,12 @@ Item {
             Layout.fillWidth: true
             contentHeight: 30
 
+            background: Rectangle {
+                color: ( theme ? theme.panelColour : pal.base )
+                border.color: ( theme ? theme.frameColour : pal.mid )
+                border.width: 1
+            }
+
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: 10
@@ -520,7 +617,7 @@ Item {
 
                 Label {
                     text: ( appSupervisor ? ( "Version " + appSupervisor.appVersion ) : "" )
-                    opacity: 0.75
+                    color: ( theme ? theme.metaTextColour : pal.mid )
                 }
 
                 Item {
@@ -537,7 +634,7 @@ Item {
                         var hostText = appSupervisor.hostRoomEnabled ? "host:on" : "host:off"
                         return "Roles: " + joinText + "  " + hostText
                     }
-                    opacity: 0.75
+                    color: ( theme ? theme.metaTextColour : pal.mid )
                 }
             }
         }
