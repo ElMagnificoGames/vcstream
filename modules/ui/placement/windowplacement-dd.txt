@@ -1,0 +1,59 @@
+= WindowPlacement
+
+== Description
+
+I am a main-window placement persistence and repair adaptor.
+I load and save the main window geometry using Qt `QSettings`, and I repair restored geometry so the window remains reachable on the current monitor layout.
+
+I collaborate with `QWindow`/`QScreen` for window and screen geometry, with Qt `QSettings` for persistence, and with `WindowRectFitter` for multi-rectangle fitting.
+I do not decide the UI minimum size, I do not implement the geometry fitting algorithm, and I do not persist arbitrary settings beyond the main window placement keys.
+
+State model:
+- Thread affinity: UI thread (calls operate on a `QWindow`).
+- Lifetime/ownership: stateless free functions; safe to call during app startup and shutdown once a Qt application exists.
+- Re-entrancy: not re-entrant; callers must serialise calls on the UI thread.
+
+== Public interface
+
+- `void restoreAndRepairMainWindowPlacement( QWindow *window )` restores main window placement from settings and repairs it against the current screen layout.
+
+  Arguments:
+  - `window` must be non-null and must be a valid top-level window.
+  - `window->minimumSize()` is treated as authoritative; the function never leaves the window smaller than the minimum size.
+
+  Behaviour:
+  - If saved size exists (`ui/mainWindow/width`, `ui/mainWindow/height`), resize the window.
+  - Clamp size to be at least the window minimum size.
+  - If saved position exists (`ui/mainWindow/x`, `ui/mainWindow/y`), move the window; otherwise centre it on the current (or primary) screen's `availableGeometry()`.
+  - Repair the resulting rectangle against the current allowed region (union of per-screen `availableGeometry()`), using `windowrectfitter::fit()`.
+
+- `void saveMainWindowPlacement( QWindow *window )` persists the current main window placement into settings.
+
+  Arguments:
+  - `window` must be non-null.
+
+  Settings keys:
+  - `ui/mainWindow/x`
+  - `ui/mainWindow/y`
+  - `ui/mainWindow/width`
+  - `ui/mainWindow/height`
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+- Notes: intended for UI-thread use only.
+
+Errors:
+- No explicit failure reporting.
+- If screen information is unavailable or empty, the fitter's fallback behaviour is used.
+
+== Implementation details
+
+- Allowed region is built from `QGuiApplication::screens()` and each screen's `availableGeometry()`.
+- Repair uses a small title-bar visibility heuristic (title bar height and grip width constants) for degraded layouts where even the minimum size does not fully fit.
+- Persistence uses `QSettings::sync()` so placement is written promptly on shutdown.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore, QtGui).
