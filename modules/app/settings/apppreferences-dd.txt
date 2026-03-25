@@ -27,7 +27,7 @@ Properties:
   - `victorian` force the Scholarly Gothic palette
 
   Defaults:
-  - if missing, defaults to `system`.
+- if missing, defaults to `victorian`.
 
   Notes:
   - The value is persisted as a string; unknown values may be persisted and later returned unchanged.
@@ -41,12 +41,25 @@ Properties:
   - `custom` use the OKLCH custom accent triple
 
   Defaults:
-  - if missing, defaults to `system`.
+- if missing, defaults to `victorian`.
 
   Notes:
   - The value is persisted as a string; unknown values may be persisted and later returned unchanged.
 
-- `QString fontFamily` selects the preferred UI font family.
+- `QString fontPreset` selects the application's typeface preset.
+
+  Allowed values (recommended set used by the UI):
+  - `victorian` use bundled Victorian fonts (body + headings).
+  - `system` use the platform/system UI font.
+  - `custom` use `fontFamily`.
+
+  Defaults:
+  - if missing, defaults to `victorian`.
+
+  Notes:
+  - Unknown values are clamped to `victorian`.
+
+- `QString fontFamily` selects the preferred UI font family when `fontPreset` is `custom`.
   - Empty string means "use the system default".
 
 - `int fontScalePercent` scales UI text sizes.
@@ -97,6 +110,7 @@ Settings keys:
 - `ui/profile/displayName`
 - `ui/theme/mode`
 - `ui/theme/accent`
+- `ui/appearance/fontPreset`
 - `ui/appearance/fontFamily`
 - `ui/appearance/fontScalePercent`
 - `ui/appearance/density`

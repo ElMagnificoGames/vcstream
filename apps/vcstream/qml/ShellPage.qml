@@ -146,8 +146,10 @@ Page {
                 spacing: ( theme ? theme.spaceTight : 12 )
 
                 Label {
-                    text: "vcstream"
+                    text: "VCStream"
                     font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
+                    font.family: ( theme ? theme.headingFontFamily : Qt.application.font.family )
+                    font.capitalization: Font.SmallCaps
                     color: ( theme ? theme.textColour : pal.text )
                     Layout.alignment: Qt.AlignVCenter
                 }

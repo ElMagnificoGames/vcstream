@@ -123,6 +123,18 @@ void LocalDeviceCatalogue::setWindowCaptureStatus( const QString &status )
 
 void LocalDeviceCatalogue::refresh()
 {
+    // Qt Multimedia device enumeration is UI/platform backed and is not safe to
+    // run under a pure QCoreApplication (for example, unit tests).
+    if ( qobject_cast<QGuiApplication *>( QCoreApplication::instance() ) == nullptr ) {
+        setScreens( QVariantList() );
+        setCameras( QVariantList() );
+        setMicrophones( QVariantList() );
+        setAudioOutputs( QVariantList() );
+        setWindows( QVariantList() );
+        setWindowCaptureStatus( QStringLiteral( "Device enumeration requires a GUI application." ) );
+        return;
+    }
+
     if ( mediaEnumerationDisabled() ) {
         setScreens( QVariantList() );
         setCameras( QVariantList() );

@@ -7,6 +7,7 @@ namespace {
 const QString kSettingsDisplayNameKey = QStringLiteral( "ui/profile/displayName" );
 const QString kSettingsThemeModeKey = QStringLiteral( "ui/theme/mode" );
 const QString kSettingsAccentKey = QStringLiteral( "ui/theme/accent" );
+const QString kSettingsFontPresetKey = QStringLiteral( "ui/appearance/fontPreset" );
 const QString kSettingsFontFamilyKey = QStringLiteral( "ui/appearance/fontFamily" );
 const QString kSettingsFontScalePercentKey = QStringLiteral( "ui/appearance/fontScalePercent" );
 const QString kSettingsDensityKey = QStringLiteral( "ui/appearance/density" );
@@ -21,8 +22,9 @@ AppPreferences::AppPreferences( QObject *parent )
     : QObject( parent )
 {
     m_displayName = QString();
-    m_themeMode = QStringLiteral( "system" );
-    m_accent = QStringLiteral( "system" );
+    m_themeMode = QStringLiteral( "victorian" );
+    m_accent = QStringLiteral( "victorian" );
+    m_fontPreset = QStringLiteral( "victorian" );
     m_fontFamily = QString();
     m_fontScalePercent = 100;
     m_density = QStringLiteral( "comfortable" );
@@ -70,6 +72,28 @@ void AppPreferences::setAccent( const QString &accent )
     if ( m_accent != accent ) {
         m_accent = accent;
         Q_EMIT accentChanged();
+    }
+}
+
+QString AppPreferences::fontPreset() const
+{
+    return m_fontPreset;
+}
+
+void AppPreferences::setFontPreset( const QString &preset )
+{
+    QString clamped;
+
+    clamped = preset;
+    if ( clamped != QStringLiteral( "system" )
+         && clamped != QStringLiteral( "victorian" )
+         && clamped != QStringLiteral( "custom" ) ) {
+        clamped = QStringLiteral( "victorian" );
+    }
+
+    if ( m_fontPreset != clamped ) {
+        m_fontPreset = clamped;
+        Q_EMIT fontPresetChanged();
     }
 }
 
@@ -233,8 +257,9 @@ void AppPreferences::reload()
     QSettings settings;
 
     setDisplayName( settings.value( kSettingsDisplayNameKey, QString() ).toString() );
-    setThemeMode( settings.value( kSettingsThemeModeKey, QStringLiteral( "system" ) ).toString() );
-    setAccent( settings.value( kSettingsAccentKey, QStringLiteral( "system" ) ).toString() );
+    setThemeMode( settings.value( kSettingsThemeModeKey, m_themeMode ).toString() );
+    setAccent( settings.value( kSettingsAccentKey, m_accent ).toString() );
+    setFontPreset( settings.value( kSettingsFontPresetKey, m_fontPreset ).toString() );
     setFontFamily( settings.value( kSettingsFontFamilyKey, QString() ).toString() );
     setFontScalePercent( settings.value( kSettingsFontScalePercentKey, m_fontScalePercent ).toInt() );
     setDensity( settings.value( kSettingsDensityKey, QStringLiteral( "comfortable" ) ).toString() );
@@ -251,6 +276,7 @@ void AppPreferences::save()
     settings.setValue( kSettingsDisplayNameKey, m_displayName );
     settings.setValue( kSettingsThemeModeKey, m_themeMode );
     settings.setValue( kSettingsAccentKey, m_accent );
+    settings.setValue( kSettingsFontPresetKey, m_fontPreset );
     settings.setValue( kSettingsFontFamilyKey, m_fontFamily );
     settings.setValue( kSettingsFontScalePercentKey, m_fontScalePercent );
     settings.setValue( kSettingsDensityKey, m_density );

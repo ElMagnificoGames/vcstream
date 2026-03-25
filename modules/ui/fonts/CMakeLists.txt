@@ -1,4 +1,7 @@
 add_library( vcstream_ui_fonts
+    bundledfonts.qrc
+    bundledfonts.h
+    bundledfonts.cpp
     fontpreviewsafetychecker.h
     fontpreviewsafetychecker.cpp
     fontpreviewsafetycheckerdefault.h

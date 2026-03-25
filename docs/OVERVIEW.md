@@ -51,6 +51,13 @@ Valid combinations include:
 
 The relay host, the DJ/music publisher, and the person running OBS do **not** need to be the same person.
 
+### Product naming (UI vs identifiers)
+
+- In prose and user-facing copy, treat the product name as a proper noun: `VCStream`.
+- For the executable, paths, repository names, settings keys, and other identifiers, use `vcstream` (typically in monospace in documentation).
+- Do not start sentences with `vcstream`.
+- In wordmark contexts (landing page title, app title display), favour `VCStream` with small caps styling where available.
+
 ---
 
 ## Main user needs

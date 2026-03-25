@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/fonts">
+        <file alias="librecaslontext/LibreCaslonText-wght.ttf">../../../third_party/fonts/librecaslontext/LibreCaslonText-wght.ttf</file>
+        <file alias="librecaslontext/LibreCaslonText-Italic-wght.ttf">../../../third_party/fonts/librecaslontext/LibreCaslonText-Italic-wght.ttf</file>
+        <file alias="librecaslondisplay/LibreCaslonDisplay-Regular.ttf">../../../third_party/fonts/librecaslondisplay/LibreCaslonDisplay-Regular.ttf</file>
+    </qresource>
+</RCC>

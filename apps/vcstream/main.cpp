@@ -57,7 +57,8 @@ int main( int argc, char **argv )
 
         QObject::connect( &engine, &QQmlApplicationEngine::warnings, &engine, []( const QList<QQmlError> &warnings ) {
             for ( const QQmlError &e : warnings ) {
-                qWarning() << e;
+                const QByteArray msgUtf8 = e.toString().toUtf8();
+                qWarning( "%s", msgUtf8.constData() );
             }
         } );
 

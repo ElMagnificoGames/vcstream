@@ -10,6 +10,7 @@ class AppPreferences final : public QObject
     Q_PROPERTY( QString displayName READ displayName WRITE setDisplayName NOTIFY displayNameChanged )
     Q_PROPERTY( QString themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged )
     Q_PROPERTY( QString accent READ accent WRITE setAccent NOTIFY accentChanged )
+    Q_PROPERTY( QString fontPreset READ fontPreset WRITE setFontPreset NOTIFY fontPresetChanged )
     Q_PROPERTY( QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontFamilyChanged )
     Q_PROPERTY( int fontScalePercent READ fontScalePercent WRITE setFontScalePercent NOTIFY fontScalePercentChanged )
     Q_PROPERTY( QString density READ density WRITE setDensity NOTIFY densityChanged )
@@ -29,6 +30,9 @@ public:
 
     QString accent() const;
     void setAccent( const QString &accent );
+
+    QString fontPreset() const;
+    void setFontPreset( const QString &preset );
 
     QString fontFamily() const;
     void setFontFamily( const QString &family );
@@ -56,6 +60,7 @@ Q_SIGNALS:
 
     void themeModeChanged();
     void accentChanged();
+    void fontPresetChanged();
     void fontFamilyChanged();
     void fontScalePercentChanged();
     void densityChanged();
@@ -72,6 +77,7 @@ private:
     QString m_displayName;
     QString m_themeMode;
     QString m_accent;
+    QString m_fontPreset;
     QString m_fontFamily;
     int m_fontScalePercent;
     QString m_density;

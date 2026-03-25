@@ -444,6 +444,25 @@ MUST:
 
 WHY: operator overloading can improve clarity for true numeric types, but it can also create unreadable code and surprising performance.
 
+#### 4.3.1 Do not use `operator<<` chaining (MUST)
+
+- Do not use overloaded `operator<<` for "streaming" or chaining in project-authored code.
+  - This includes (but is not limited to):
+    - Qt message streaming (for example: `qWarning() << ...`, `qDebug() << ...`).
+    - `QTextStream` output chains.
+    - `std::ostream` output chains (`std::cout << ...`).
+    - Serialisation chains such as `QDataStream << ...`.
+    - Qt container append idioms such as `QStringList() << ...` or `args << ...`.
+
+- The bitshift operators (`<<` / `>>`) are allowed when used as bitshifts.
+- Overloads of `<<` / `>>` are only acceptable when the meaning is genuinely "shift-like" (for example: fixed-point numeric shift).
+
+Exception:
+- If a third-party API is fundamentally designed around `operator<<` (for example, QtTest data rows), and avoiding it would do more harm than good, it may be used.
+  - In that case, keep the usage local and add a short inline comment explaining why this is the least harmful option.
+
+WHY: This project prioritises readability above all else. Streaming/chaining syntax encourages long, hard-to-scan expressions, hides formatting and encoding decisions, and makes it harder to reason about allocations and side effects. Explicit formatting and explicit append/insert calls are more reviewable and less error-prone.
+
 ### 4.4 Implicit conversions (MUST be minimised)
 
 - Single-argument constructors SHOULD be `explicit` unless implicit conversion is part of the deliberate, documented API.
@@ -865,7 +884,7 @@ Example of a justifiable long function:
 
 - If the program can produce an error or warning, it MUST have a central error reporting facility.
 - The interface MUST at minimum support Warning and Error levels and printf-style formatting.
-- iostream-style logging and streaming operator chains MUST NOT be used.
+- iostream-style logging and streaming operator chains MUST NOT be used.  See Section 4.3.1.
 
 This includes Qt streaming loggers such as `qDebug() << ...`.
 

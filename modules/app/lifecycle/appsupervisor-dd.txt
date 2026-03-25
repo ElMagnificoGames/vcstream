@@ -46,6 +46,10 @@ State model:
 - `QString systemFontFamily() const` returns the platform's general system UI font family.
   - Intended for rendering fallback UI copy when the user-selected app font renders incorrectly.
 
+- `QString victorianBodyFontFamily() const` returns the registered bundled Victorian body font family, or an empty string if unavailable.
+- `QString victorianHeadingFontFamily() const` returns the registered bundled Victorian heading font family, or an empty string if unavailable.
+  - Intended for use by QML theme token plumbing.
+
 - `QObject *fontPreviewSafetyCache() const` returns a UI-facing cache that can check whether a font can be preview-rendered safely.
   - Intended for use by the font picker to avoid repeatedly attempting previews that are known to render incorrectly on this machine.
   - Non-goal: this cache must not prevent the user selecting a font; it is only advisory.

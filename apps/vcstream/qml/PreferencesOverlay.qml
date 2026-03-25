@@ -128,13 +128,51 @@ Control {
                             spacing: ( root.theme ? root.theme.spaceCompact : 8 )
 
                             Label {
-                                text: "Appearance"
+                                text: "Typeface"
                                 font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
                                 color: ( root.theme ? root.theme.textColour : root.pal.text )
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                Label {
+                                    text: "Preset"
+                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                }
+
+                                VcComboBox {
+                                    id: fontPresetCombo
+                                    objectName: "preferencesFontPresetCombo"
+                                    theme: root.theme
+                                    Layout.fillWidth: true
+                                    model: ["Victorian", "System default", "Custom..."]
+                                    currentIndex: indexForPresetValue( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontPreset : "victorian" )
+
+                                    function presetValueForIndex( idx ) {
+                                        if ( idx === 2 ) return "custom"
+                                        if ( idx === 1 ) return "system"
+                                        return "victorian"
+                                    }
+
+                                    function indexForPresetValue( v ) {
+                                        if ( v === "system" ) return 1
+                                        if ( v === "custom" ) return 2
+                                        return 0
+                                    }
+
+                                    onActivated: {
+                                        if ( appSupervisor && appSupervisor.preferences ) {
+                                            appSupervisor.preferences.fontPreset = presetValueForIndex( currentIndex )
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: ( appSupervisor && appSupervisor.preferences && appSupervisor.preferences.fontPreset === "custom" )
                                 spacing: ( root.theme ? root.theme.spaceCompact : 8 )
 
                                 Label {
@@ -157,6 +195,12 @@ Control {
                                     onValueSelected: function( v ) {
                                         if ( appSupervisor && appSupervisor.preferences ) {
                                             appSupervisor.preferences.fontFamily = v
+
+                                            if ( v.length === 0 ) {
+                                                appSupervisor.preferences.fontPreset = "system"
+                                            } else {
+                                                appSupervisor.preferences.fontPreset = "custom"
+                                            }
                                         }
                                     }
                                 }
@@ -180,7 +224,21 @@ Control {
                                     elide: Text.ElideRight
                                     maximumLineCount: 1
                                     verticalAlignment: Text.AlignVCenter
-                                    readonly property string selectedFamily: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontFamily : "" )
+                                    readonly property string selectedFamily: {
+                                        if ( !appSupervisor || !appSupervisor.preferences ) {
+                                            return ""
+                                        }
+
+                                        if ( appSupervisor.preferences.fontPreset === "custom" ) {
+                                            return appSupervisor.preferences.fontFamily
+                                        }
+
+                                        if ( appSupervisor.preferences.fontPreset === "victorian" ) {
+                                            return ( appSupervisor.victorianBodyFontFamily ? appSupervisor.victorianBodyFontFamily : "" )
+                                        }
+
+                                        return ""
+                                    }
 
                                     property int vcHealthSerial: 0
 
@@ -265,6 +323,24 @@ Control {
                                 }
                             }
 
+                        }
+                    }
+
+                    VcPanel {
+                        width: parent.width
+                        theme: root.theme
+                        accentRole: "tertiary"
+
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                            Label {
+                                text: "Layout"
+                                font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
+                                color: ( root.theme ? root.theme.textColour : root.pal.text )
+                            }
+
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: ( root.theme ? root.theme.spaceCompact : 8 )
@@ -340,7 +416,6 @@ Control {
                                     }
                                 }
                             }
-
                         }
                     }
 
@@ -369,25 +444,25 @@ Control {
                                 }
 
                                  VcComboBox {
-                                     objectName: "preferencesThemeModeCombo"
-                                     theme: root.theme
-                                     Layout.fillWidth: true
-                                     model: ["System", "Light", "Dark", "Victorian"]
-                                     currentIndex: indexForModeValue( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.themeMode : "system" )
+                                      objectName: "preferencesThemeModeCombo"
+                                      theme: root.theme
+                                      Layout.fillWidth: true
+                                      model: ["Victorian", "System", "Light", "Dark"]
+                                      currentIndex: indexForModeValue( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.themeMode : "victorian" )
 
-                                     function modeValueForIndex( idx ) {
-                                         if ( idx === 1 ) return "light"
-                                         if ( idx === 2 ) return "dark"
-                                         if ( idx === 3 ) return "victorian"
-                                         return "system"
-                                     }
+                                      function modeValueForIndex( idx ) {
+                                          if ( idx === 3 ) return "dark"
+                                          if ( idx === 2 ) return "light"
+                                          if ( idx === 1 ) return "system"
+                                          return "victorian"
+                                      }
 
-                                     function indexForModeValue( v ) {
-                                         if ( v === "light" ) return 1
-                                         if ( v === "dark" ) return 2
-                                         if ( v === "victorian" ) return 3
-                                         return 0
-                                     }
+                                      function indexForModeValue( v ) {
+                                          if ( v === "system" ) return 1
+                                          if ( v === "light" ) return 2
+                                          if ( v === "dark" ) return 3
+                                          return 0
+                                      }
 
                                     onActivated: {
                                         if ( appSupervisor && appSupervisor.preferences ) {
@@ -407,39 +482,39 @@ Control {
                                 }
 
                                  VcComboBox {
-                                     objectName: "preferencesAccentCombo"
-                                     theme: root.theme
-                                     Layout.fillWidth: true
-                                     model: ["System", "Victorian", "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Pink", "Purple", "Custom..."]
-                                     currentIndex: indexForAccentValue( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.accent : "system" )
+                                      objectName: "preferencesAccentCombo"
+                                      theme: root.theme
+                                      Layout.fillWidth: true
+                                      model: ["Victorian", "System", "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Pink", "Purple", "Custom..."]
+                                      currentIndex: indexForAccentValue( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.accent : "victorian" )
 
-                                     function accentValueForIndex( idx ) {
-                                         if ( idx === 1 ) return "victorian"
-                                         if ( idx === 2 ) return "red"
-                                         if ( idx === 3 ) return "orange"
-                                         if ( idx === 4 ) return "yellow"
-                                         if ( idx === 5 ) return "green"
-                                         if ( idx === 6 ) return "cyan"
-                                         if ( idx === 7 ) return "blue"
-                                         if ( idx === 8 ) return "pink"
-                                         if ( idx === 9 ) return "purple"
-                                         if ( idx === 10 ) return "custom"
-                                         return "system"
-                                     }
+                                      function accentValueForIndex( idx ) {
+                                          if ( idx === 10 ) return "custom"
+                                          if ( idx === 9 ) return "purple"
+                                          if ( idx === 8 ) return "pink"
+                                          if ( idx === 7 ) return "blue"
+                                          if ( idx === 6 ) return "cyan"
+                                          if ( idx === 5 ) return "green"
+                                          if ( idx === 4 ) return "yellow"
+                                          if ( idx === 3 ) return "orange"
+                                          if ( idx === 2 ) return "red"
+                                          if ( idx === 1 ) return "system"
+                                          return "victorian"
+                                      }
 
-                                     function indexForAccentValue( v ) {
-                                         if ( v === "victorian" ) return 1
-                                         if ( v === "red" ) return 2
-                                         if ( v === "orange" ) return 3
-                                         if ( v === "yellow" ) return 4
-                                         if ( v === "green" ) return 5
-                                         if ( v === "cyan" ) return 6
-                                         if ( v === "blue" ) return 7
-                                         if ( v === "pink" ) return 8
-                                         if ( v === "purple" ) return 9
-                                         if ( v === "custom" ) return 10
-                                         return 0
-                                     }
+                                      function indexForAccentValue( v ) {
+                                          if ( v === "system" ) return 1
+                                          if ( v === "red" ) return 2
+                                          if ( v === "orange" ) return 3
+                                          if ( v === "yellow" ) return 4
+                                          if ( v === "green" ) return 5
+                                          if ( v === "cyan" ) return 6
+                                          if ( v === "blue" ) return 7
+                                          if ( v === "pink" ) return 8
+                                          if ( v === "purple" ) return 9
+                                          if ( v === "custom" ) return 10
+                                          return 0
+                                      }
 
                                     onActivated: {
                                         if ( appSupervisor && appSupervisor.preferences ) {

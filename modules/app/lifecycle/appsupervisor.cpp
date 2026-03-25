@@ -8,11 +8,17 @@
 
 #include "modules/app/devices/localdevicecatalogue.h"
 #include "modules/app/settings/apppreferences.h"
+#include "modules/ui/fonts/bundledfonts.h"
 #include "modules/ui/fonts/fontpreviewsafetycache.h"
 
 AppSupervisor::AppSupervisor( QObject *parent )
     : QObject( parent )
 {
+    bundledfonts::ensureRegistered();
+    const bundledfonts::Families f = bundledfonts::families();
+    m_victorianBodyFontFamily = f.victorianBody;
+    m_victorianHeadingFontFamily = f.victorianHeading;
+
     m_joinRoomEnabled = false;
     m_hostRoomEnabled = false;
 
@@ -110,4 +116,14 @@ QStringList AppSupervisor::fontFamilies() const
 QString AppSupervisor::systemFontFamily() const
 {
     return QFontDatabase::systemFont( QFontDatabase::GeneralFont ).family();
+}
+
+QString AppSupervisor::victorianBodyFontFamily() const
+{
+    return m_victorianBodyFontFamily;
+}
+
+QString AppSupervisor::victorianHeadingFontFamily() const
+{
+    return m_victorianHeadingFontFamily;
 }

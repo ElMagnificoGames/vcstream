@@ -9,7 +9,7 @@ ApplicationWindow {
     minimumWidth: uiMetrics.minimumWindowWidth
     minimumHeight: uiMetrics.minimumWindowHeight
     visible: true
-    title: "vcstream"
+    title: "VCStream"
 
     onWidthChanged: {
         if ( width < minimumWidth ) {
@@ -48,13 +48,36 @@ ApplicationWindow {
         id: uiTheme
 
         readonly property string styleFamily: "workshop"
-        readonly property string mode: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.themeMode : "system" )
-        readonly property string accent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.accent : "system" )
+        readonly property string mode: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.themeMode : "victorian" )
+        readonly property string accent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.accent : "victorian" )
 
-        readonly property string fontFamily: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontFamily : "" )
+        readonly property string fontPreset: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontPreset : "victorian" )
+        readonly property string customFontFamily: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontFamily : "" )
         readonly property int fontScalePercent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontScalePercent : 100 )
         readonly property string density: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.density : "comfortable" )
         readonly property int zoomPercent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.zoomPercent : 100 )
+
+        readonly property string victorianBodyFontFamily: ( appSupervisor ? appSupervisor.victorianBodyFontFamily : "" )
+        readonly property string victorianHeadingFontFamily: ( appSupervisor ? appSupervisor.victorianHeadingFontFamily : "" )
+
+        readonly property string bodyFontFamily: {
+            if ( fontPreset === "custom" && customFontFamily && customFontFamily.length > 0 ) {
+                return customFontFamily
+            }
+
+            if ( fontPreset === "victorian" && victorianBodyFontFamily && victorianBodyFontFamily.length > 0 ) {
+                return victorianBodyFontFamily
+            }
+
+            return Qt.application.font.family
+        }
+
+        readonly property string headingFontFamily: {
+            if ( fontPreset === "victorian" && victorianHeadingFontFamily && victorianHeadingFontFamily.length > 0 ) {
+                return victorianHeadingFontFamily
+            }
+            return bodyFontFamily
+        }
 
         readonly property real zoomScale: Math.max( 0.5, Math.min( 2.0, zoomPercent / 100.0 ) )
         readonly property real fontScale: Math.max( 0.75, Math.min( 1.5, fontScalePercent / 100.0 ) )
@@ -435,7 +458,7 @@ ApplicationWindow {
     palette.toolTipBase: uiTheme.toolTipBaseColour
     palette.toolTipText: uiTheme.toolTipTextColour
 
-    font.family: ( uiTheme.fontFamily && uiTheme.fontFamily.length > 0 ) ? uiTheme.fontFamily : Qt.application.font.family
+    font.family: uiTheme.bodyFontFamily
     font.pixelSize: uiTheme.fontBasePx
 
     property bool preferencesOpen: false

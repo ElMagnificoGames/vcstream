@@ -150,8 +150,16 @@ This should cover:
   - any other locally available inputs/outputs the app can use as sinks/sources
 
 **Victorian mode follow-ups (styling):**
-- Bundle a bookish serif for headings and a highly legible body font; wire them into theme tokens.
-- Add an optional subtle paper-grain overlay (no faux ageing; keep it clean and low-contrast).
+- Completed: bundle Victorian fonts and wire them into a typeface preset:
+  - body: Libre Caslon Text
+  - headings: Libre Caslon Display
+- Deferred: optional subtle paper-grain overlay (no faux ageing; keep it clean and low-contrast).
+  - Reconsider when the app has more real content-dense screens and we can validate readability/contrast across common DPI/scaling.
+
+**Accessibility follow-ups (motion):**
+- Deferred: reduced-motion preference.
+  - Reconsider once we introduce non-trivial animations/transitions (beyond simple hover state changes), so the preference has immediate effect.
+  - Regardless of this deferral, any future authored motion must degrade to instant state changes when reduced-motion is enabled.
 
 **Completion criteria:**
 - preferences entry point exists in the app shell UI

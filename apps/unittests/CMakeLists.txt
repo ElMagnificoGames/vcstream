@@ -1,6 +1,7 @@
 add_subdirectory( app/lifecycle )
 add_subdirectory( app/defence )
 add_subdirectory( qml )
+add_subdirectory( style )
 add_subdirectory( ui/geometry )
 add_subdirectory( ui/colour )
 add_subdirectory( ui/fonts )

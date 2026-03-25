@@ -15,6 +15,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFontDatabase>
+#include <QFont>
 #include <cmath>
 #include <QGuiApplication>
 #include <QObject>
@@ -1536,7 +1537,8 @@ void tst_QmlUi::style_projectDoesNotUseDefaultControlsDirectly()
 void tst_QmlUi::style_projectDoesNotUseUnsupportedCanvasApis()
 {
     // Scan the embedded QML resources to avoid depending on a checkout-relative path.
-    QDirIterator it( QStringLiteral( ":/qml" ), QStringList() << QStringLiteral( "*.qml" ), QDir::Files, QDirIterator::Subdirectories );
+    const QStringList patterns = QStringList{ QStringLiteral( "*.qml" ) };
+    QDirIterator it( QStringLiteral( ":/qml" ), patterns, QDir::Files, QDirIterator::Subdirectories );
 
     QVERIFY2( it.hasNext(), "Expected QML resources under :/qml" );
 
@@ -1590,6 +1592,17 @@ void tst_QmlUi::layout_noOverlapsInKeyScreens()
     QVERIFY( window != nullptr );
     QVERIFY( QTest::qWaitForWindowExposed( window ) );
     QTest::qWait( 80 );
+
+    // Bundled Victorian fonts should register and become the app font when the
+    // default font preset is `victorian`.
+    {
+        const QString victorianBody = supervisor.victorianBodyFontFamily();
+        QVERIFY2( !victorianBody.isEmpty(), "Victorian bundled body font should be available" );
+
+        const QFont windowFont = rootObject->property( "font" ).value<QFont>();
+        QCOMPARE( windowFont.family(), victorianBody );
+    }
+
     failIfAnyWarnings( "layout-post-load" );
     clearMessages();
 
@@ -1651,6 +1664,7 @@ void tst_QmlUi::appearancePreferences_extremes_noLayoutGlitches()
 
         supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
         supervisor.preferences()->setProperty( "accent", QStringLiteral( "green" ) );
+        supervisor.preferences()->setProperty( "fontPreset", QStringLiteral( "custom" ) );
         supervisor.preferences()->setProperty( "fontFamily", family );
         supervisor.preferences()->setProperty( "fontScalePercent", 150 );
         supervisor.preferences()->setProperty( "density", QStringLiteral( "spacious" ) );
@@ -1732,6 +1746,7 @@ void tst_QmlUi::text_noOverlapsInKeyFlows_ignoringOverlays()
     if ( supervisor.preferences() != nullptr ) {
         supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
         supervisor.preferences()->setProperty( "accent", QStringLiteral( "custom" ) );
+        supervisor.preferences()->setProperty( "fontPreset", QStringLiteral( "custom" ) );
         supervisor.preferences()->setProperty( "customAccentHueDegrees", 160.0 );
         supervisor.preferences()->setProperty( "customAccentChroma", 0.18 );
         supervisor.preferences()->setProperty( "customAccentLightness", 0.66 );

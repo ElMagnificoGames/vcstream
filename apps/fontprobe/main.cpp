@@ -17,8 +17,9 @@
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
-#include <QTextStream>
 #include <QtGlobal>
+
+#include <cstdio>
 
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -28,6 +29,25 @@
 #include "modules/app/defence/crashguard.h"
 
 namespace {
+
+void writeUtf8( FILE *out, const QString &s )
+{
+    if ( out == nullptr ) {
+        return;
+    }
+
+    const QByteArray utf8 = s.toUtf8();
+    ( void )fwrite( utf8.constData(), 1u, static_cast<size_t>( utf8.size() ), out );
+}
+
+void writeLiteral( FILE *out, const char *s )
+{
+    if ( out == nullptr || s == nullptr ) {
+        return;
+    }
+
+    ( void )fputs( s, out );
+}
 
 QString sha256Hex( const QByteArray &bytes )
 {
@@ -100,28 +120,39 @@ QString cpalVersionString( const QByteArray &cpal )
     return QString::number( v );
 }
 
-void printFontFacts( QTextStream &out, const QFont &font )
+void printFontFacts( FILE *out, const QFont &font )
 {
-    out << "Font request family: '" << font.family() << "'\n";
-    out << "Font request pixelSize: " << font.pixelSize() << "\n";
+    const QByteArray familyUtf8 = font.family().toUtf8();
+    ( void )fprintf( out, "Font request family: '%s'\n", familyUtf8.constData() );
+    ( void )fprintf( out, "Font request pixelSize: %d\n", font.pixelSize() );
 
     const QFontInfo info( font );
-    out << "Font resolved family: '" << info.family() << "'\n";
-    out << "Font exactMatch: " << ( info.exactMatch() ? "true" : "false" ) << "\n";
+    const QByteArray resolvedFamilyUtf8 = info.family().toUtf8();
+    ( void )fprintf( out, "Font resolved family: '%s'\n", resolvedFamilyUtf8.constData() );
+    ( void )fprintf( out, "Font exactMatch: %s\n", ( info.exactMatch() ? "true" : "false" ) );
 
     const QRawFont raw = QRawFont::fromFont( font );
-    out << "QRawFont valid: " << ( raw.isValid() ? "true" : "false" ) << "\n";
+    ( void )fprintf( out, "QRawFont valid: %s\n", ( raw.isValid() ? "true" : "false" ) );
 
     if ( raw.isValid() ) {
         const QByteArray colr = raw.fontTable( "COLR" );
         const QByteArray cpal = raw.fontTable( "CPAL" );
         const QByteArray fvar = raw.fontTable( "fvar" );
 
-        out << "Table COLR present: " << ( colr.isEmpty() ? "false" : "true" )
-            << " version: " << ( colr.isEmpty() ? QStringLiteral( "n/a" ) : colrVersionString( colr ) ) << "\n";
-        out << "Table CPAL present: " << ( cpal.isEmpty() ? "false" : "true" )
-            << " version: " << ( cpal.isEmpty() ? QStringLiteral( "n/a" ) : cpalVersionString( cpal ) ) << "\n";
-        out << "Table fvar present: " << ( fvar.isEmpty() ? "false" : "true" ) << "\n";
+        const QString colrVersion = colr.isEmpty() ? QStringLiteral( "n/a" ) : colrVersionString( colr );
+        const QString cpalVersion = cpal.isEmpty() ? QStringLiteral( "n/a" ) : cpalVersionString( cpal );
+        const QByteArray colrVersionUtf8 = colrVersion.toUtf8();
+        const QByteArray cpalVersionUtf8 = cpalVersion.toUtf8();
+
+        ( void )fprintf( out,
+            "Table COLR present: %s version: %s\n",
+            ( colr.isEmpty() ? "false" : "true" ),
+            colrVersionUtf8.constData() );
+        ( void )fprintf( out,
+            "Table CPAL present: %s version: %s\n",
+            ( cpal.isEmpty() ? "false" : "true" ),
+            cpalVersionUtf8.constData() );
+        ( void )fprintf( out, "Table fvar present: %s\n", ( fvar.isEmpty() ? "false" : "true" ) );
     }
 }
 
@@ -188,20 +219,20 @@ bool isNonWhite( const QRgb px )
     return !( qRed( px ) == 255 && qGreen( px ) == 255 && qBlue( px ) == 255 );
 }
 
-QImage renderSilhouette( QTextStream &out, const RunConfig &cfg, const QFont &font )
+QImage renderSilhouette( FILE *out, const RunConfig &cfg, const QFont &font )
 {
     QImage img( cfg.width, cfg.height, QImage::Format_ARGB32_Premultiplied );
     img.fill( qRgba( 255, 255, 255, 255 ) );
 
     const QRawFont raw = QRawFont::fromFont( font );
     if ( !raw.isValid() ) {
-        out << "Silhouette: QRawFont invalid\n";
+        writeLiteral( out, "Silhouette: QRawFont invalid\n" );
         return QImage();
     }
 
     const QVector<quint32> glyphs = raw.glyphIndexesForString( cfg.text );
     if ( glyphs.isEmpty() ) {
-        out << "Silhouette: no glyphs for string\n";
+        writeLiteral( out, "Silhouette: no glyphs for string\n" );
         return QImage();
     }
 
@@ -230,7 +261,7 @@ QImage renderSilhouette( QTextStream &out, const RunConfig &cfg, const QFont &fo
         }
     }
 
-    out << "Silhouette: glyphs=" << glyphs.size() << " emptyPaths=" << emptyPaths << "\n";
+    ( void )fprintf( out, "Silhouette: glyphs=%d emptyPaths=%d\n", glyphs.size(), emptyPaths );
 
     QPainter p( &img );
     p.setRenderHint( QPainter::Antialiasing, false );
@@ -339,8 +370,7 @@ QImage renderDiffMask( const QImage &raster, const QImage &sil )
 
 int runQPainterScenario( const RunConfig &cfg )
 {
-    QTextStream out( stdout );
-    out << "Scenario: qpaint\n";
+    writeLiteral( stdout, "Scenario: qpaint\n" );
 
     QImage img( cfg.width, cfg.height, QImage::Format_ARGB32_Premultiplied );
     img.fill( qRgba( 255, 255, 255, 255 ) );
@@ -353,7 +383,7 @@ int runQPainterScenario( const RunConfig &cfg )
     f.setFamily( cfg.family );
     f.setPixelSize( cfg.pixelSize );
 
-    printFontFacts( out, f );
+    printFontFacts( stdout, f );
 
     p.setFont( f );
     p.setPen( QColor( 20, 20, 20 ) );
@@ -364,30 +394,45 @@ int runQPainterScenario( const RunConfig &cfg )
 
     const QString path = outputPathFor( cfg, QStringLiteral( "qpaint" ) );
     if ( !img.save( path ) ) {
-        out << "Save failed: '" << path << "'\n";
+        const QByteArray pathUtf8 = path.toUtf8();
+        ( void )fprintf( stdout, "Save failed: '%s'\n", pathUtf8.constData() );
         return 2;
     }
 
-    out << "Output: '" << path << "'\n";
-    out << "Image sha256: " << sha256HexImage( img ) << "\n";
+    {
+        const QByteArray pathUtf8 = path.toUtf8();
+        const QByteArray shaUtf8 = sha256HexImage( img ).toUtf8();
+        ( void )fprintf( stdout, "Output: '%s'\n", pathUtf8.constData() );
+        ( void )fprintf( stdout, "Image sha256: %s\n", shaUtf8.constData() );
+    }
 
     if ( cfg.emitSilhouette || cfg.emitOverlay || cfg.emitDiff ) {
-        const QImage sil = renderSilhouette( out, cfg, f );
+        const QImage sil = renderSilhouette( stdout, cfg, f );
         if ( !sil.isNull() ) {
             const QString sp = outputPathFor( cfg, QStringLiteral( "qpaint-silhouette" ) );
             sil.save( sp );
-            out << "Silhouette output: '" << sp << "'\n";
-            out << "Silhouette sha256: " << sha256HexImage( sil ) << "\n";
+            {
+                const QByteArray spUtf8 = sp.toUtf8();
+                const QByteArray silShaUtf8 = sha256HexImage( sil ).toUtf8();
+                ( void )fprintf( stdout, "Silhouette output: '%s'\n", spUtf8.constData() );
+                ( void )fprintf( stdout, "Silhouette sha256: %s\n", silShaUtf8.constData() );
+            }
 
             const double iou = computeMaskIoU( img, sil );
-            out << "Mask IoU: " << QString::number( iou, 'f', 4 ) << "\n";
+            {
+                const QByteArray iouUtf8 = QString::number( iou, 'f', 4 ).toUtf8();
+                ( void )fprintf( stdout, "Mask IoU: %s\n", iouUtf8.constData() );
+            }
 
             if ( cfg.emitOverlay ) {
                 const QImage overlay = renderOverlay( img, sil );
                 if ( !overlay.isNull() ) {
                     const QString op = outputPathFor( cfg, QStringLiteral( "qpaint-overlay" ) );
                     overlay.save( op );
-                    out << "Overlay output: '" << op << "'\n";
+                    {
+                        const QByteArray opUtf8 = op.toUtf8();
+                        ( void )fprintf( stdout, "Overlay output: '%s'\n", opUtf8.constData() );
+                    }
                 }
             }
 
@@ -396,7 +441,10 @@ int runQPainterScenario( const RunConfig &cfg )
                 if ( !diff.isNull() ) {
                     const QString dp = outputPathFor( cfg, QStringLiteral( "qpaint-diff" ) );
                     diff.save( dp );
-                    out << "Diff output: '" << dp << "'\n";
+                    {
+                        const QByteArray dpUtf8 = dp.toUtf8();
+                        ( void )fprintf( stdout, "Diff output: '%s'\n", dpUtf8.constData() );
+                    }
                 }
             }
         }
@@ -509,15 +557,17 @@ Item {
 
 int runQtQuickScenario( const RunConfig &cfg, const QString &renderType, const QString &tag )
 {
-    QTextStream out( stdout );
-    out << "Scenario: " << tag << "\n";
+    {
+        const QByteArray tagUtf8 = tag.toUtf8();
+        ( void )fprintf( stdout, "Scenario: %s\n", tagUtf8.constData() );
+    }
 
     // Also print font facts from the QFont side so we can compare fallback behaviour.
     {
         QFont f;
         f.setFamily( cfg.family );
         f.setPixelSize( cfg.pixelSize );
-        printFontFacts( out, f );
+        printFontFacts( stdout, f );
     }
 
     QQmlEngine engine;
@@ -534,22 +584,25 @@ int runQtQuickScenario( const RunConfig &cfg, const QString &renderType, const Q
     }
 
     if ( component.status() != QQmlComponent::Ready ) {
-        out << "QML component not ready. status=" << component.status() << "\n";
-        out << component.errorString() << "\n";
+        const QByteArray errStrUtf8 = component.errorString().toUtf8();
+        ( void )fprintf( stdout, "QML component not ready. status=%d\n", static_cast<int>( component.status() ) );
+        ( void )fprintf( stdout, "%s\n", errStrUtf8.constData() );
         const QList<QQmlError> errors = component.errors();
         for ( const QQmlError &e : errors ) {
-            out << "QML error: " << e.toString() << "\n";
+            const QByteArray eUtf8 = e.toString().toUtf8();
+            ( void )fprintf( stdout, "QML error: %s\n", eUtf8.constData() );
         }
 
-        out << "QML source:\n";
-        out << qml << "\n";
+        writeLiteral( stdout, "QML source:\n" );
+        writeUtf8( stdout, qml );
+        writeLiteral( stdout, "\n" );
         return 3;
     }
 
     QObject *rootObj = component.create();
     QQuickItem *rootItem = qobject_cast<QQuickItem *>( rootObj );
     if ( rootItem == nullptr ) {
-        out << "Root object is not a QQuickItem.\n";
+        writeLiteral( stdout, "Root object is not a QQuickItem.\n" );
         return 4;
     }
 
@@ -573,30 +626,38 @@ int runQtQuickScenario( const RunConfig &cfg, const QString &renderType, const Q
 
     const QString path = outputPathFor( cfg, tag );
     if ( img.isNull() ) {
-        out << "grabWindow returned null image.\n";
-        out << "Output (not written): '" << path << "'\n";
+        const QByteArray pathUtf8 = path.toUtf8();
+        writeLiteral( stdout, "grabWindow returned null image.\n" );
+        ( void )fprintf( stdout, "Output (not written): '%s'\n", pathUtf8.constData() );
         return 5;
     }
 
     if ( !img.save( path ) ) {
-        out << "Save failed: '" << path << "'\n";
+        const QByteArray pathUtf8 = path.toUtf8();
+        ( void )fprintf( stdout, "Save failed: '%s'\n", pathUtf8.constData() );
         return 6;
     }
 
-    out << "Output: '" << path << "'\n";
-    out << "Image sha256: " << sha256HexImage( img ) << "\n";
+    {
+        const QByteArray pathUtf8 = path.toUtf8();
+        const QByteArray shaUtf8 = sha256HexImage( img ).toUtf8();
+        ( void )fprintf( stdout, "Output: '%s'\n", pathUtf8.constData() );
+        ( void )fprintf( stdout, "Image sha256: %s\n", shaUtf8.constData() );
+    }
     return 0;
 }
 
 int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, const QString &tag )
 {
-    QTextStream out( stdout );
-    out << "Scenario: " << tag << "\n";
+    {
+        const QByteArray tagUtf8 = tag.toUtf8();
+        ( void )fprintf( stdout, "Scenario: %s\n", tagUtf8.constData() );
+    }
 
     QFont f;
     f.setFamily( cfg.family );
     f.setPixelSize( cfg.pixelSize );
-    printFontFacts( out, f );
+    printFontFacts( stdout, f );
 
     // Build a families list; ensure the requested family is included.
     QStringList families = QFontDatabase::families();
@@ -618,11 +679,13 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
         }
     }
 
-    out << "Families in model: " << families.size() << "\n";
-    out << "Requested family index: " << families.indexOf( cfg.family ) << "\n";
-    if ( families.size() > 0 ) {
-        out << "First family: '" << families.first() << "'\n";
-        out << "Last family: '" << families.last() << "'\n";
+    ( void )fprintf( stdout, "Families in model: %d\n", families.size() );
+    ( void )fprintf( stdout, "Requested family index: %d\n", families.indexOf( cfg.family ) );
+    if ( !families.isEmpty() ) {
+        const QByteArray firstUtf8 = families.first().toUtf8();
+        const QByteArray lastUtf8 = families.last().toUtf8();
+        ( void )fprintf( stdout, "First family: '%s'\n", firstUtf8.constData() );
+        ( void )fprintf( stdout, "Last family: '%s'\n", lastUtf8.constData() );
     }
 
     QQmlEngine engine;
@@ -638,15 +701,16 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
     }
 
     if ( component.status() != QQmlComponent::Ready ) {
-        out << "QML component not ready. status=" << component.status() << "\n";
-        out << component.errorString() << "\n";
+        const QByteArray errStrUtf8 = component.errorString().toUtf8();
+        ( void )fprintf( stdout, "QML component not ready. status=%d\n", static_cast<int>( component.status() ) );
+        ( void )fprintf( stdout, "%s\n", errStrUtf8.constData() );
         return 3;
     }
 
     QObject *rootObj = component.create();
     QQuickItem *rootItem = qobject_cast<QQuickItem *>( rootObj );
     if ( rootItem == nullptr ) {
-        out << "Root object is not a QQuickItem.\n";
+        writeLiteral( stdout, "Root object is not a QQuickItem.\n" );
         return 4;
     }
 
@@ -671,7 +735,7 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
 
     QObject *lvObj = rootObj->findChild<QObject *>( QStringLiteral( "probeListView" ) );
     if ( lvObj == nullptr ) {
-        out << "ListView not found.\n";
+        writeLiteral( stdout, "ListView not found.\n" );
         return 8;
     }
 
@@ -689,35 +753,38 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
         const int stride = rowH + 4;
         const int scanCount = families.size();
 
-        out << "Scan mode: true count=" << scanCount << " stridePx=" << stride << "\n";
-        out.flush();
+        ( void )fprintf( stdout, "Scan mode: true count=%d stridePx=%d\n", scanCount, stride );
+        ( void )fflush( stdout );
 
         for ( int i = 0; i < scanCount; ++i ) {
             const double y = qMin( maxY, qMax( 0.0, static_cast<double>( i * stride ) ) );
             const QString family = families.at( i );
+            const QByteArray familyUtf8 = family.toUtf8();
 
-            out << "Index " << i << " family='" << family << "' set contentY=" << y << " ...\n";
-            out.flush();
+            ( void )fprintf( stdout, "Index %d family='%s' set contentY=%.3f ...\n", i, familyUtf8.constData(), y );
+            ( void )fflush( stdout );
 
             QElapsedTimer timer;
             timer.start();
 
             lvObj->setProperty( "contentY", y );
             QCoreApplication::processEvents( QEventLoop::AllEvents, 50 );
-            out << "  after events; grabbing...\n";
-            out.flush();
+            writeLiteral( stdout, "  after events; grabbing...\n" );
+            ( void )fflush( stdout );
 
             const QImage img = view.grabWindow();
 
             const qint64 ms = timer.elapsed();
-            out << "  elapsedMs=" << ms << "\n";
-            out.flush();
+            ( void )fprintf( stdout, "  elapsedMs=%lld\n", static_cast<long long>( ms ) );
+            ( void )fflush( stdout );
 
             if ( !img.isNull() && ms >= 1000 ) {
                 const QString slowPath = outputPathForIndex( cfg, tag + QStringLiteral( "-slow" ), i, family );
                 img.save( slowPath );
-                out << "  slow snapshot: '" << slowPath << "' sha256=" << sha256HexImage( img ) << "\n";
-                out.flush();
+                const QByteArray slowPathUtf8 = slowPath.toUtf8();
+                const QByteArray shaUtf8 = sha256HexImage( img ).toUtf8();
+                ( void )fprintf( stdout, "  slow snapshot: '%s' sha256=%s\n", slowPathUtf8.constData(), shaUtf8.constData() );
+                ( void )fflush( stdout );
             }
 
             if ( ms > worstMs ) {
@@ -729,8 +796,8 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
     } else {
         const int steps = qMax( 3, cfg.stressSteps );
 
-        out << "Scan mode: false steps=" << steps << "\n";
-        out.flush();
+        ( void )fprintf( stdout, "Scan mode: false steps=%d\n", steps );
+        ( void )fflush( stdout );
 
         for ( int i = 0; i < steps; ++i ) {
             const double t = ( steps > 1 ) ? ( static_cast<double>( i ) / static_cast<double>( steps - 1 ) ) : 0.0;
@@ -742,25 +809,30 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
             if ( approxIndex >= 0 && approxIndex < families.size() ) {
                 approxFamily = families.at( approxIndex );
             }
+            const QByteArray approxFamilyUtf8 = approxFamily.toUtf8();
 
-            out << "Step " << i << "/" << ( steps - 1 ) << " contentY=" << y
-                << " approxFamily='" << approxFamily << "' ...\n";
-            out.flush();
+            ( void )fprintf( stdout,
+                "Step %d/%d contentY=%.3f approxFamily='%s' ...\n",
+                i,
+                ( steps - 1 ),
+                y,
+                approxFamilyUtf8.constData() );
+            ( void )fflush( stdout );
 
             QElapsedTimer timer;
             timer.start();
 
             lvObj->setProperty( "contentY", y );
             QCoreApplication::processEvents( QEventLoop::AllEvents, 50 );
-            out << "  after events; grabbing...\n";
-            out.flush();
+            writeLiteral( stdout, "  after events; grabbing...\n" );
+            ( void )fflush( stdout );
 
             const QImage img = view.grabWindow();
             Q_UNUSED( img );
 
             const qint64 ms = timer.elapsed();
-            out << "  elapsedMs=" << ms << "\n";
-            out.flush();
+            ( void )fprintf( stdout, "  elapsedMs=%lld\n", static_cast<long long>( ms ) );
+            ( void )fflush( stdout );
 
             if ( ms > worstMs ) {
                 worstMs = ms;
@@ -770,14 +842,23 @@ int runQtQuickScrollStress( const RunConfig &cfg, const QString &renderType, con
         }
     }
 
-    out << "Worst elapsedMs: " << worstMs << " at step " << worstStep << " approxFamily='" << worstFamily << "'\n";
+    {
+        const QByteArray worstFamilyUtf8 = worstFamily.toUtf8();
+        ( void )fprintf( stdout,
+            "Worst elapsedMs: %lld at step %d approxFamily='%s'\n",
+            static_cast<long long>( worstMs ),
+            worstStep,
+            worstFamilyUtf8.constData() );
+    }
 
     const QImage finalImg = view.grabWindow();
     const QString path = outputPathFor( cfg, tag );
     if ( !finalImg.isNull() ) {
         finalImg.save( path );
-        out << "Output: '" << path << "'\n";
-        out << "Image sha256: " << sha256HexImage( finalImg ) << "\n";
+        const QByteArray pathUtf8 = path.toUtf8();
+        const QByteArray shaUtf8 = sha256HexImage( finalImg ).toUtf8();
+        ( void )fprintf( stdout, "Output: '%s'\n", pathUtf8.constData() );
+        ( void )fprintf( stdout, "Image sha256: %s\n", shaUtf8.constData() );
     }
 
     return 0;
@@ -805,22 +886,26 @@ int runWorkerOnce( const RunConfig &cfg )
         return runQtQuickScrollStress( cfg, QStringLiteral( "Text.NativeRendering" ), QStringLiteral( "quick-scroll-native" ) );
     }
 
-    QTextStream out( stderr );
-    out << "Unknown scenario: '" << cfg.scenario << "'\n";
+    {
+        const QByteArray scenarioUtf8 = cfg.scenario.toUtf8();
+        ( void )fprintf( stderr, "Unknown scenario: '%s'\n", scenarioUtf8.constData() );
+    }
     return 7;
 }
 
 int runOrchestrator( const RunConfig &cfg, const QString &exePath, const int timeoutMs )
 {
-    QTextStream out( stdout );
-    out << "vcstream_fontprobe\n";
-    out << "Qt version: " << QT_VERSION_STR << "\n";
-    out << "Platform: " << QGuiApplication::platformName() << "\n";
-    out << "Family: '" << cfg.family << "'\n";
-    out << "Pixel size: " << cfg.pixelSize << "\n";
-    out << "Image size: " << cfg.width << "x" << cfg.height << "\n";
-    out << "Output dir: '" << cfg.outDir << "'\n";
-    out << "Timeout (per scenario): " << timeoutMs << " ms\n";
+    const QByteArray platformUtf8 = QGuiApplication::platformName().toUtf8();
+    const QByteArray familyUtf8 = cfg.family.toUtf8();
+    const QByteArray outDirUtf8 = cfg.outDir.toUtf8();
+    ( void )fprintf( stdout, "vcstream_fontprobe\n" );
+    ( void )fprintf( stdout, "Qt version: %s\n", QT_VERSION_STR );
+    ( void )fprintf( stdout, "Platform: %s\n", platformUtf8.constData() );
+    ( void )fprintf( stdout, "Family: '%s'\n", familyUtf8.constData() );
+    ( void )fprintf( stdout, "Pixel size: %d\n", cfg.pixelSize );
+    ( void )fprintf( stdout, "Image size: %dx%d\n", cfg.width, cfg.height );
+    ( void )fprintf( stdout, "Output dir: '%s'\n", outDirUtf8.constData() );
+    ( void )fprintf( stdout, "Timeout (per scenario): %d ms\n", timeoutMs );
 
     QStringList scenarios = {
         QStringLiteral( "qpaint" ),
@@ -829,8 +914,8 @@ int runOrchestrator( const RunConfig &cfg, const QString &exePath, const int tim
     };
 
     if ( cfg.stress ) {
-        scenarios << QStringLiteral( "quick-scroll-qt" )
-                  << QStringLiteral( "quick-scroll-native" );
+        scenarios.append( QStringLiteral( "quick-scroll-qt" ) );
+        scenarios.append( QStringLiteral( "quick-scroll-native" ) );
     }
 
     int worst = 0;
@@ -838,26 +923,43 @@ int runOrchestrator( const RunConfig &cfg, const QString &exePath, const int tim
     int skipped = 0;
 
     for ( const QString &scenario : scenarios ) {
-        out << "\n--- Running: " << scenario << " ---\n";
-        out.flush();
+        {
+            const QByteArray scenarioUtf8 = scenario.toUtf8();
+            ( void )fprintf( stdout, "\n--- Running: %s ---\n", scenarioUtf8.constData() );
+            ( void )fflush( stdout );
+        }
 
         QProcess p;
         QStringList args;
-        args << QStringLiteral( "--worker" )
-             << QStringLiteral( "--scenario" ) << scenario
-             << QStringLiteral( "--family" ) << cfg.family
-             << QStringLiteral( "--text" ) << cfg.text
-             << QStringLiteral( "--width" ) << QString::number( cfg.width )
-             << QStringLiteral( "--height" ) << QString::number( cfg.height )
-             << QStringLiteral( "--pixel-size" ) << QString::number( cfg.pixelSize )
-             << QStringLiteral( "--warmup-ms" ) << QString::number( cfg.warmupMs )
-             << QStringLiteral( "--stress" ) << ( cfg.stress ? QStringLiteral( "1" ) : QStringLiteral( "0" ) )
-             << QStringLiteral( "--stress-steps" ) << QString::number( cfg.stressSteps )
-             << QStringLiteral( "--stress-max-families" ) << QString::number( cfg.stressMaxFamilies )
-             << QStringLiteral( "--emit-silhouette" ) << ( cfg.emitSilhouette ? QStringLiteral( "1" ) : QStringLiteral( "0" ) )
-             << QStringLiteral( "--emit-overlay" ) << ( cfg.emitOverlay ? QStringLiteral( "1" ) : QStringLiteral( "0" ) )
-             << QStringLiteral( "--emit-diff" ) << ( cfg.emitDiff ? QStringLiteral( "1" ) : QStringLiteral( "0" ) )
-             << QStringLiteral( "--out-dir" ) << cfg.outDir;
+        args.append( QStringLiteral( "--worker" ) );
+        args.append( QStringLiteral( "--scenario" ) );
+        args.append( scenario );
+        args.append( QStringLiteral( "--family" ) );
+        args.append( cfg.family );
+        args.append( QStringLiteral( "--text" ) );
+        args.append( cfg.text );
+        args.append( QStringLiteral( "--width" ) );
+        args.append( QString::number( cfg.width ) );
+        args.append( QStringLiteral( "--height" ) );
+        args.append( QString::number( cfg.height ) );
+        args.append( QStringLiteral( "--pixel-size" ) );
+        args.append( QString::number( cfg.pixelSize ) );
+        args.append( QStringLiteral( "--warmup-ms" ) );
+        args.append( QString::number( cfg.warmupMs ) );
+        args.append( QStringLiteral( "--stress" ) );
+        args.append( cfg.stress ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
+        args.append( QStringLiteral( "--stress-steps" ) );
+        args.append( QString::number( cfg.stressSteps ) );
+        args.append( QStringLiteral( "--stress-max-families" ) );
+        args.append( QString::number( cfg.stressMaxFamilies ) );
+        args.append( QStringLiteral( "--emit-silhouette" ) );
+        args.append( cfg.emitSilhouette ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
+        args.append( QStringLiteral( "--emit-overlay" ) );
+        args.append( cfg.emitOverlay ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
+        args.append( QStringLiteral( "--emit-diff" ) );
+        args.append( cfg.emitDiff ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
+        args.append( QStringLiteral( "--out-dir" ) );
+        args.append( cfg.outDir );
 
         p.setProgram( exePath );
         p.setArguments( args );
@@ -865,13 +967,13 @@ int runOrchestrator( const RunConfig &cfg, const QString &exePath, const int tim
         p.start();
 
         if ( !p.waitForStarted( 2000 ) ) {
-            out << "Failed to start worker.\n";
+            writeLiteral( stdout, "Failed to start worker.\n" );
             worst = qMax( worst, 100 );
             continue;
         }
 
         if ( !p.waitForFinished( timeoutMs ) ) {
-            out << "Timeout; killing worker.\n";
+            writeLiteral( stdout, "Timeout; killing worker.\n" );
             p.kill();
             p.waitForFinished( 2000 );
             worst = qMax( worst, 124 );
@@ -879,27 +981,29 @@ int runOrchestrator( const RunConfig &cfg, const QString &exePath, const int tim
         }
 
         const QByteArray log = p.readAll();
-        out << QString::fromUtf8( log );
+        ( void )fwrite( log.constData(), 1u, static_cast<size_t>( log.size() ), stdout );
 
         const int code = p.exitCode();
         if ( p.exitStatus() != QProcess::NormalExit ) {
-            out << "Worker crashed.\n";
+            writeLiteral( stdout, "Worker crashed.\n" );
             worst = qMax( worst, 125 );
         } else if ( code != 0 ) {
             const bool isQuickScenario = scenario.startsWith( QStringLiteral( "quick-" ) );
             const bool treatAsSkipped = isQuickScenario && ( code == 3 || code == 4 || code == 5 );
             if ( treatAsSkipped ) {
-                out << "Worker exitCode: " << code << " (skipped; Qt Quick may be unavailable in this environment)\n";
+                ( void )fprintf( stdout,
+                    "Worker exitCode: %d (skipped; Qt Quick may be unavailable in this environment)\n",
+                    code );
                 ++skipped;
             } else {
-                out << "Worker exitCode: " << code << "\n";
+                ( void )fprintf( stdout, "Worker exitCode: %d\n", code );
                 worst = qMax( worst, code );
             }
         }
     }
 
     if ( skipped > 0 ) {
-        out << "\nNote: " << skipped << " Qt Quick scenario(s) were skipped.\n";
+        ( void )fprintf( stdout, "\nNote: %d Qt Quick scenario(s) were skipped.\n", skipped );
     }
 
     return worst;
@@ -1015,21 +1119,19 @@ int main( int argc, char **argv )
 
         QString dirError;
         if ( !ensureDir( cfg.outDir, &dirError ) ) {
-            QTextStream err( stderr );
-            err << dirError << "\n";
+            const QByteArray dirErrorUtf8 = dirError.toUtf8();
+            ( void )fprintf( stderr, "%s\n", dirErrorUtf8.constData() );
             return 2;
         }
 
         if ( cfg.family.isEmpty() ) {
-            QTextStream err( stderr );
-            err << "Missing required --family argument.\n";
+            writeLiteral( stderr, "Missing required --family argument.\n" );
             return 2;
         }
 
         if ( parser.isSet( workerOpt ) ) {
             if ( cfg.scenario.isEmpty() ) {
-                QTextStream err( stderr );
-                err << "Missing required --scenario in --worker mode.\n";
+                writeLiteral( stderr, "Missing required --scenario in --worker mode.\n" );
                 return 2;
             }
             return runWorkerOnce( cfg );

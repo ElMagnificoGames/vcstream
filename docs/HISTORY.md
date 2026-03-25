@@ -322,12 +322,12 @@ What was shown (evidence)
 - List model metrics remained stable during stalls (count/content height/viewport height did not thrash), arguing against a model rebuild as the primary cause.
 - After the tracer was corrected, stalls correlated strongly with a specific visible region of the list that contained Bitcount “Ink” font families (for example “Bitcount Grid Double Ink”).
 - Screenshots showed corrupted preview rendering for at least “Bitcount Grid Double Ink”.
-- The user confirmed other applications on the same system also struggle with “Bitcount Grid Double Ink”, suggesting the issue may be in the font itself and/or shared font rendering stack rather than vcstream-only.
+- The user confirmed other applications on the same system also struggle with “Bitcount Grid Double Ink”, suggesting the issue may be in the font itself and/or shared font rendering stack rather than VCStream-only.
 
 Additional technical investigation (evidence)
 - Font inspection on the affected system showed:
   - “Bitcount Grid Double Ink” is a colour font (`color=true`) with COLR/CPAL tables and COLR version 1 (COLRv1), and is also a variable font (fvar axes present).
-  - Other colour fonts tested by the user (for example Bungee Color, Cairo Play, Noto Color Emoji, Aref Ruqaa Ink, Blaka Ink) did not reproduce the hang or corruption in vcstream.
+- Other colour fonts tested by the user (for example Bungee Color, Cairo Play, Noto Color Emoji, Aref Ruqaa Ink, Blaka Ink) did not reproduce the hang or corruption in VCStream.
 
 What is still speculation (not proven)
 - The exact cause of the stall is not proven. A plausible hypothesis is that previewing sample text in certain fonts triggers expensive or buggy rendering/shaping paths that can block the GUI thread.
@@ -438,3 +438,113 @@ Cleanup
 - Unit tests:
   - Added deterministic tests for the cache state machine using an injected fake checker:
     - `apps/unittests/ui/fonts/tst_fontpreviewsafetycache.cpp`
+
+## Roadmap note — Defer paper-grain overlay and reduced-motion preference
+
+### What
+
+- Updated the roadmap to explicitly mark the paper-grain overlay and reduced-motion preference as deferred follow-ups.
+
+### Why
+
+- The current application feature set is still early and UI-focused; these items are polish rather than core scaffolding.
+- Paper grain is decorative and easy to get wrong (contrast/readability and scaling artefacts).
+- The UI currently contains little explicit authored motion, so a reduced-motion preference would not provide meaningful immediate benefit.
+
+### Decisions
+
+- Paper grain remains a possible future enhancement, but is not a near-term priority; revisit once there are more content-dense screens and we can validate readability.
+- Reduced-motion preference remains a possible future enhancement; revisit once we add non-trivial animations/transitions so the preference has immediate effect.
+
+### Technical notes
+
+- Roadmap update: `docs/ROADMAP.md`
+
+## Task 1.4d — Bundle Victorian fonts and add typeface preset
+
+### What
+
+- Bundled a Victorian font pair (body + headings) and registered it at startup so the app's Victorian style has consistent typography across machines.
+- Added a new Preferences "Typeface" preset so users can pick between Victorian, system default, and a custom installed font.
+- Made Victorian the default for new installs for theme mode, accent, and typeface preset.
+
+### Why
+
+- The project style direction relies on authored typography; relying only on system fonts undermines the intended visual identity.
+- A preset avoids forcing users to understand font-family names whilst keeping the existing power-user custom font picker.
+
+### Acceptance criteria
+
+- Victorian typography renders even on machines without any special fonts installed.
+- Users can switch between Victorian, system, and custom font choices without QML warnings or layout glitches.
+
+### Decisions
+
+- Typeface preset is independent of theme mode; selecting Victorian mode does not implicitly change the typeface preset.
+- Custom font selection is represented as a preset (`custom`) plus an optional font family string; the empty string remains "system default".
+- Bundled fonts chosen from the Google Fonts catalogue under SIL OFL 1.1:
+  - body: Libre Caslon Text (variable font)
+  - headings: Libre Caslon Display
+
+### Technical notes
+
+- Bundled fonts and licences:
+  - `third_party/fonts/librecaslontext/`
+  - `third_party/fonts/librecaslondisplay/`
+- Font resource wiring:
+  - `modules/ui/fonts/bundledfonts.qrc`
+  - `modules/ui/fonts/bundledfonts.h`
+  - `modules/ui/fonts/bundledfonts.cpp`
+  - `modules/ui/fonts/CMakeLists.txt`
+- App wiring:
+  - `modules/app/lifecycle/appsupervisor.h`
+  - `modules/app/lifecycle/appsupervisor.cpp`
+- Preferences persistence:
+  - `modules/app/settings/apppreferences.h`
+  - `modules/app/settings/apppreferences.cpp`
+  - `modules/app/settings/apppreferences-dd.txt`
+  - `docs/SETTINGS.md`
+- QML UI updates:
+  - `apps/vcstream/qml/main.qml`
+  - `apps/vcstream/qml/PreferencesOverlay.qml`
+  - `apps/vcstream/qml/LandingPage.qml`
+  - `apps/vcstream/qml/ShellPage.qml`
+- QML smoke tests updated:
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+
+## Repository note — Adopt AGPL-3.0-only licence
+
+### What
+
+- Added the GNU Affero General Public License v3 text and a repository notice declaring this project as `AGPL-3.0-only`.
+
+### Why
+
+- The project goal is strong copyleft, including hosted network use-cases for future relay/rendezvous components.
+- The project explicitly avoids automatic "or later" licensing.
+
+### Technical notes
+
+- Licence text: `LICENSE`
+- Repository notice: `NOTICE`
+
+## Repository note — Forbid streaming/chaining `operator<<`
+
+### What
+
+- Updated coding conventions to forbid overloaded `operator<<` chains used for streaming/chaining (Qt log streaming, `QTextStream`, iostreams, `QDataStream`, and Qt container chaining idioms).
+- Added a unit-test style gate that scans the source tree and fails if forbidden `operator<<` streaming patterns are introduced.
+- Converted existing offending code to explicit printf-style logging and explicit append/formatting patterns.
+
+### Why
+
+- Readability is the project's top priority; stream/chaining overloads tend to hide formatting/encoding decisions and encourage long, hard-to-scan expressions.
+- Automated enforcement prevents future regressions by making violations immediately visible in CI.
+
+### Technical notes
+
+- Convention update: `docs/CODE-QT6.md`
+- Agent-facing reminder: `AGENTS.md`
+- Style gate test:
+  - `apps/unittests/style/tst_style.cpp`
+  - `apps/unittests/style/CMakeLists.txt`

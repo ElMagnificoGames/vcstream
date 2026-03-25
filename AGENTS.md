@@ -149,6 +149,11 @@ Be careful with UI elements that appear/disappear on hover or focus.
 
 QML warnings are treated as test failures.
 
+Warnings are a gate:
+- Do not avoid or downgrade `qWarning()` / QML warnings to make tests pass.
+- If a warning indicates a real fault (missing resource, failed registration, invalid state), emit the warning and fix the underlying cause.
+- Use `qInfo()` / `qDebug()` only for non-fault informational messages.
+
 - If you change QML behaviour, you MUST update `apps/unittests/qml/tst_qml_ui.cpp` to navigate to the new/changed UI state and interact with it (click/hover/type as appropriate).
 - Add stable `objectName` values in QML for any controls that tests need to locate.
 - Prefer testing real user flows (start screen -> join/host -> disconnect) rather than directly poking internal state.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines a **"Victorian-born digital"** styling system for vcstream's authored UI. It is written for AI agents and human developers applying styling and behaviour primarily through **Qt Quick / QML** shared components, theme tokens, and small amounts of C++ support where required.
+This document defines a **"Victorian-born digital"** styling system for VCStream's authored UI. It is written for AI agents and human developers applying styling and behaviour primarily through **Qt Quick / QML** shared components, theme tokens, and small amounts of C++ support where required.
 
 The aim is **not** "aged antique" or parody. The target look is **newly made, carefully composed, and richly presented** - as if Victorian design culture had developed native digital interfaces.
 

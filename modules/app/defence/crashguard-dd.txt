@@ -21,7 +21,7 @@ Functions:
 
 - `template <typename Fn> int crashguard::runGuardedMain( const char *context, Fn &&fn ) noexcept`
   - Runs `fn()` under a catch-all guard.
-  - `context` is a short static string describing the entry point (for example: "vcstream main").
+  - `context` is a short static string describing the entry point (for example: "VCStream main").
   - On exception, logs both a plain-language reason and technical details, and returns a non-zero exit code.
   - Intended for `main()`.
 
