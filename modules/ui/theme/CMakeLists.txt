@@ -1,6 +1,8 @@
 add_library( vcstream_ui_theme
     accentimageprovider.h
     accentimageprovider.cpp
+    themeiconimageprovider.h
+    themeiconimageprovider.cpp
 )
 
 target_link_libraries( vcstream_ui_theme PRIVATE

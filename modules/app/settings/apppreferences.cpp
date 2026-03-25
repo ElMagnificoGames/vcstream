@@ -7,6 +7,10 @@ namespace {
 const QString kSettingsDisplayNameKey = QStringLiteral( "ui/profile/displayName" );
 const QString kSettingsThemeModeKey = QStringLiteral( "ui/theme/mode" );
 const QString kSettingsAccentKey = QStringLiteral( "ui/theme/accent" );
+const QString kSettingsFontFamilyKey = QStringLiteral( "ui/appearance/fontFamily" );
+const QString kSettingsFontScalePercentKey = QStringLiteral( "ui/appearance/fontScalePercent" );
+const QString kSettingsDensityKey = QStringLiteral( "ui/appearance/density" );
+const QString kSettingsZoomPercentKey = QStringLiteral( "ui/appearance/zoomPercent" );
 const QString kSettingsCustomAccentLightnessKey = QStringLiteral( "ui/theme/customAccentLightness" );
 const QString kSettingsCustomAccentChromaKey = QStringLiteral( "ui/theme/customAccentChroma" );
 const QString kSettingsCustomAccentHueDegreesKey = QStringLiteral( "ui/theme/customAccentHueDegrees" );
@@ -19,6 +23,10 @@ AppPreferences::AppPreferences( QObject *parent )
     m_displayName = QString();
     m_themeMode = QStringLiteral( "system" );
     m_accent = QStringLiteral( "system" );
+    m_fontFamily = QString();
+    m_fontScalePercent = 100;
+    m_density = QStringLiteral( "comfortable" );
+    m_zoomPercent = 100;
     m_customAccentLightness = 0.75;
     m_customAccentChroma = 0.16;
     m_customAccentHueDegrees = 260.0;
@@ -62,6 +70,89 @@ void AppPreferences::setAccent( const QString &accent )
     if ( m_accent != accent ) {
         m_accent = accent;
         Q_EMIT accentChanged();
+    }
+}
+
+QString AppPreferences::fontFamily() const
+{
+    return m_fontFamily;
+}
+
+void AppPreferences::setFontFamily( const QString &family )
+{
+    if ( m_fontFamily != family ) {
+        m_fontFamily = family;
+        Q_EMIT fontFamilyChanged();
+    }
+}
+
+int AppPreferences::fontScalePercent() const
+{
+    return m_fontScalePercent;
+}
+
+void AppPreferences::setFontScalePercent( const int percent )
+{
+    int clamped;
+
+    clamped = percent;
+
+    if ( clamped < 75 ) {
+        clamped = 75;
+    }
+    if ( clamped > 150 ) {
+        clamped = 150;
+    }
+
+    if ( m_fontScalePercent != clamped ) {
+        m_fontScalePercent = clamped;
+        Q_EMIT fontScalePercentChanged();
+    }
+}
+
+QString AppPreferences::density() const
+{
+    return m_density;
+}
+
+void AppPreferences::setDensity( const QString &density )
+{
+    QString clamped;
+
+    clamped = density;
+    if ( clamped != QStringLiteral( "compact" )
+         && clamped != QStringLiteral( "comfortable" )
+         && clamped != QStringLiteral( "spacious" ) ) {
+        clamped = QStringLiteral( "comfortable" );
+    }
+
+    if ( m_density != clamped ) {
+        m_density = clamped;
+        Q_EMIT densityChanged();
+    }
+}
+
+int AppPreferences::zoomPercent() const
+{
+    return m_zoomPercent;
+}
+
+void AppPreferences::setZoomPercent( const int percent )
+{
+    int clamped;
+
+    clamped = percent;
+
+    if ( clamped < 50 ) {
+        clamped = 50;
+    }
+    if ( clamped > 200 ) {
+        clamped = 200;
+    }
+
+    if ( m_zoomPercent != clamped ) {
+        m_zoomPercent = clamped;
+        Q_EMIT zoomPercentChanged();
     }
 }
 
@@ -144,6 +235,10 @@ void AppPreferences::reload()
     setDisplayName( settings.value( kSettingsDisplayNameKey, QString() ).toString() );
     setThemeMode( settings.value( kSettingsThemeModeKey, QStringLiteral( "system" ) ).toString() );
     setAccent( settings.value( kSettingsAccentKey, QStringLiteral( "system" ) ).toString() );
+    setFontFamily( settings.value( kSettingsFontFamilyKey, QString() ).toString() );
+    setFontScalePercent( settings.value( kSettingsFontScalePercentKey, m_fontScalePercent ).toInt() );
+    setDensity( settings.value( kSettingsDensityKey, QStringLiteral( "comfortable" ) ).toString() );
+    setZoomPercent( settings.value( kSettingsZoomPercentKey, m_zoomPercent ).toInt() );
     setCustomAccentLightness( settings.value( kSettingsCustomAccentLightnessKey, m_customAccentLightness ).toDouble() );
     setCustomAccentChroma( settings.value( kSettingsCustomAccentChromaKey, m_customAccentChroma ).toDouble() );
     setCustomAccentHueDegrees( settings.value( kSettingsCustomAccentHueDegreesKey, m_customAccentHueDegrees ).toDouble() );
@@ -156,6 +251,10 @@ void AppPreferences::save()
     settings.setValue( kSettingsDisplayNameKey, m_displayName );
     settings.setValue( kSettingsThemeModeKey, m_themeMode );
     settings.setValue( kSettingsAccentKey, m_accent );
+    settings.setValue( kSettingsFontFamilyKey, m_fontFamily );
+    settings.setValue( kSettingsFontScalePercentKey, m_fontScalePercent );
+    settings.setValue( kSettingsDensityKey, m_density );
+    settings.setValue( kSettingsZoomPercentKey, m_zoomPercent );
     settings.setValue( kSettingsCustomAccentLightnessKey, m_customAccentLightness );
     settings.setValue( kSettingsCustomAccentChromaKey, m_customAccentChroma );
     settings.setValue( kSettingsCustomAccentHueDegreesKey, m_customAccentHueDegrees );

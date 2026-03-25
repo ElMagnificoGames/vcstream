@@ -6,6 +6,7 @@
 - `docs/CODE-QT6.md` provides all coding conventions and a great deal of the AI-operation policies for working with this codebase.  This is **MANDATORY** reading.
 - `docs/DD-TEMPLATE.txt` provides the starting template for module DD files (`*-dd.txt`).
 - `docs/HISTORY.md` provides a description of what work has been completed so far.
+- `docs/INTERNAL-TOOLS.md` documents developer-only diagnostic tools that are not built by default.
 - `docs/MODULES.md` defines the initial module boundaries and dependency direction.
 - `docs/OVERVIEW.md` provides onboarding information to understand this project and its goals.
 - `docs/ROADMAP.md` provides a detailed account of what is to be done (broken down into manageable tasks).
@@ -108,6 +109,14 @@ When adding or editing any module DD file (`*-dd.txt`), follow this checklist.
 - Keep the Public interface section contract-like (arguments, ownership, lifetime, thread safety, errors).
 
 ## UX and UI
+
+### Prefer Existing Implementations (Avoid Duplication)
+
+Before adding a new component/utility (especially QML controls, styling helpers, and common UI behaviours), first check whether the repository already has an app-owned implementation.
+
+- **Gate:** do a quick search (Glob/Grep) for an existing equivalent and reuse it by default.
+- Only introduce a new implementation when there is a clear, documented reason the existing one cannot be used (missing capability, incorrect abstraction boundary, or a measurable performance/behaviour problem).
+- When you do add something new, explicitly remove or migrate redundant alternatives in the same change so the codebase does not accumulate parallel implementations (for example: two different scrollbars).
 
 ### Copy
 

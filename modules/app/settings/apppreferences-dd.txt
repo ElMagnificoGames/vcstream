@@ -46,6 +46,25 @@ Properties:
   Notes:
   - The value is persisted as a string; unknown values may be persisted and later returned unchanged.
 
+- `QString fontFamily` selects the preferred UI font family.
+  - Empty string means "use the system default".
+
+- `int fontScalePercent` scales UI text sizes.
+  - Units: percent.
+  - Range: [75,150] (inputs are clamped).
+  - Default: 100.
+
+- `QString density` selects UI density (negative space).
+  - Allowed values (recommended set used by the UI): `compact`, `comfortable`, `spacious`.
+  - Default: `comfortable`.
+  - Notes:
+    - Unknown values are clamped to `comfortable`.
+
+- `int zoomPercent` scales the overall UI size (text and control geometry).
+  - Units: percent.
+  - Range: [50,200] (inputs are clamped).
+  - Default: 100.
+
 - `double customAccentLightness` is the OKLCH lightness for the custom accent.
   - Units: [0,1].
   - Inputs outside [0,1] are clamped.
@@ -78,6 +97,10 @@ Settings keys:
 - `ui/profile/displayName`
 - `ui/theme/mode`
 - `ui/theme/accent`
+- `ui/appearance/fontFamily`
+- `ui/appearance/fontScalePercent`
+- `ui/appearance/density`
+- `ui/appearance/zoomPercent`
 - `ui/theme/customAccentLightness`
 - `ui/theme/customAccentChroma`
 - `ui/theme/customAccentHueDegrees`

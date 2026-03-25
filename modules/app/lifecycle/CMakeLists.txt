@@ -10,6 +10,10 @@ target_link_libraries( vcstream_app_lifecycle PRIVATE
     vcstream_app_devices
 )
 
+target_link_libraries( vcstream_app_lifecycle PUBLIC
+    vcstream_ui_fonts
+)
+
 target_include_directories( vcstream_app_lifecycle PUBLIC
     ${PROJECT_SOURCE_DIR}
 )

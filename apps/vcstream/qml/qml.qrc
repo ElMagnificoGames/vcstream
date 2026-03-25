@@ -9,8 +9,9 @@
         <file>VcCheckBox.qml</file>
         <file>VcCloseButton.qml</file>
         <file>VcComboBox.qml</file>
-        <file>VcFlickScrollBar.qml</file>
+        <file>VcFontPicker.qml</file>
         <file>VcScrollBar.qml</file>
+        <file>VcSlider.qml</file>
         <file>VcTabBar.qml</file>
         <file>VcTabButton.qml</file>
         <file>VcToolButton.qml</file>

@@ -61,7 +61,7 @@ Page {
 
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.margins: 10
+        anchors.margins: ( theme ? theme.spaceTight : 10 )
         z: 1000
 
         text: "Preferences"
@@ -83,7 +83,7 @@ Page {
 
     VcPanel {
         anchors.centerIn: parent
-        width: Math.min( parent.width * 0.85, 520 )
+        width: Math.min( parent.width * 0.85, ( theme && theme.macroPx ? theme.macroPx( 520 ) : 520 ) )
         theme: root.theme
         accentRole: "tertiary"
 
@@ -93,7 +93,7 @@ Page {
 
             Label {
                 text: "vcstream"
-                font.pixelSize: 28
+                font.pixelSize: ( theme ? theme.fontTitlePx : 28 )
                 color: textColour
                 horizontalAlignment: Text.AlignHCenter
                 Layout.fillWidth: true
@@ -114,8 +114,8 @@ Page {
                 tone: "primary"
                 text: "Join room"
                 Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                font.pixelSize: 18
+                Layout.preferredHeight: Math.round( ( theme ? theme.controlHeight : 42 ) * 1.5 )
+                font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
 
                 onClicked: {
                     root.joinRequested()
@@ -130,8 +130,8 @@ Page {
                 tone: "secondary"
                 text: "Host room"
                 Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                font.pixelSize: 18
+                Layout.preferredHeight: Math.round( ( theme ? theme.controlHeight : 42 ) * 1.5 )
+                font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
 
                 onClicked: {
                     root.hostRequested()

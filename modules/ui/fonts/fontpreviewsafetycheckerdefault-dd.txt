@@ -1,0 +1,43 @@
+ = FontPreviewSafetyCheckerDefault
+
+ == Description
+
+ I am the default concrete implementation of `FontPreviewSafetyChecker`.
+ I run a font preview safety check by rendering a small sample string and comparing the raster output to a reference shape derived from the font.
+
+ I collaborate with `FontPreviewSafetyCache`, which owns caching and timeout/backpressure policy.
+ I collaborate with Qt's font and rasterisation stack (`QFont`, `QRawFont`, `QPainter`).
+ I do not cache results.
+ I do not implement timeouts or backpressure.
+
+ State model:
+ - Thread affinity: constructed and called from the UI thread.
+ - Lifetime/ownership: typically QObject-parented to the cache.
+ - Re-entrancy: not re-entrant.
+ - Concurrency: each check runs on its own worker thread.
+ - Shutdown: worker threads are cleaned up on normal completion; if a worker hangs inside the font stack, it may persist until process shutdown.
+
+ == Public interface
+
+ Functions:
+ - `void startCheck( const QString &family, int pixelSize )`
+   - Spawns a worker thread for the check and returns immediately.
+   - Emits `checkFinished( family, pixelSize, ok )` when the worker completes.
+
+ Thread safety:
+ - Thread-safe: No.
+
+ == Implementation details
+
+ - Sample string: currently "Ag".
+ - Rendering strategy:
+   - Raster render via `QPainter::drawText`.
+   - Reference render derived from `QRawFont`:
+     - Prefer outline paths via `QRawFont::pathForGlyph`.
+     - Fallback to `QRawFont::alphaMapForGlyph` when outlines are unavailable.
+ - The implementation also detects likely per-glyph fallback (font merging) by comparing a normal render to one with `QFont::NoFontMerging`.
+
+ == Requirements
+
+ - Language: C++17.
+ - Qt: 6.x (QtCore, QtGui).

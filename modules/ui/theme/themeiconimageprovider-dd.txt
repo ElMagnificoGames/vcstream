@@ -1,0 +1,52 @@
+ = ThemeIconImageProvider
+
+ == Description
+
+ I am a QML image provider that renders theme icons.
+ I translate a theme icon name into a raster `QImage` so QML can use icons via the normal `Image { source: "image://..." }` path.
+
+ I collaborate with QML UI code that needs icons and with Qt's theme icon lookup (`QIcon::fromTheme`).
+ I do not define which icon names the application should use, and I do not provide a fallback icon set.
+
+ State model:
+ - Thread affinity: UI thread (called by QML image loading).
+ - Lifetime/ownership: owned by a `QQmlApplicationEngine` via `addImageProvider()`.
+ - Re-entrancy: not re-entrant.
+
+ == Public interface
+
+ Registration:
+ - Register this provider with a `QQmlApplicationEngine` via `addImageProvider( "<name>", new ThemeIconImageProvider() )`.
+
+ Functions:
+ - `QImage requestImage( const QString &id, QSize *size, const QSize &requestedSize )` returns an image for the requested id.
+
+   Arguments:
+   - `id` is the theme icon name (passed to `QIcon::fromTheme( id )`).
+   - `size` is an output pointer; if non-null it is filled with the returned image size.
+   - `requestedSize` is the desired size.
+
+   Sizing:
+   - If `requestedSize.width()` or `requestedSize.height()` is <= 0, the provider uses a default size of 24x24.
+
+ Returns:
+ - If the icon is available and a pixmap can be produced, returns an opaque or alpha-bearing icon image as provided by Qt.
+ - If the icon is missing (or pixmap creation fails), returns a fully transparent image of the chosen size.
+
+ Thread safety:
+ - Thread-safe: No.
+ - Re-entrant: No.
+
+ Errors:
+ - Missing icons do not produce warnings; they return a transparent image.
+
+ == Implementation details
+
+ - Icon lookup uses `QIcon::fromTheme( id )`.
+ - Rasterisation uses `QIcon::pixmap()` and returns `pixmap.toImage()`.
+ - The transparent fallback uses `QImage::Format_ARGB32_Premultiplied`.
+
+ == Requirements
+
+ - Language: C++17.
+ - Qt: 6.x (QtGui, QtQml, QtQuick).

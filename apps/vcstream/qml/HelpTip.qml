@@ -8,9 +8,9 @@ Item {
     property Item target
     property Item overlay
     property string text
-    property int maxWidth: 360
-    property int margin: 10
-    property int offsetY: 6
+    property int maxWidth: ( theme && theme.macroPx ? theme.macroPx( 360 ) : 360 )
+    property int margin: ( theme ? theme.spaceTight : 10 )
+    property int offsetY: ( theme ? theme.spaceNudge : 6 )
     property var appPalette
     property var theme
 
@@ -47,7 +47,7 @@ Item {
     Text {
         id: textItem
         anchors.fill: parent
-        anchors.margins: 8
+        anchors.margins: ( theme ? theme.spaceCompact : 8 )
         text: root.text
         wrapMode: Text.Wrap
         color: textColour

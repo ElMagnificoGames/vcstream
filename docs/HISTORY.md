@@ -247,6 +247,11 @@
 - Switched the Preferences navigation to a left-hand category list (Discord-style) instead of top tabs.
 - Added an in-app theme system (System/Light/Dark + accent colours) that applies immediately.
 - Added a custom accent colour picker based on the OKLCH colour model (hue slider + chroma/lightness plane).
+- Added additional Appearance preferences:
+  - font family override (system-installed fonts)
+  - font size scaling (75% to 150%)
+  - UI density (compact/comfortable/spacious)
+  - zoom scaling (50% to 200%)
 - Extended the QML UI smoke test to open Preferences from the landing page and from the shell, switch categories, refresh the device catalogue, and close the overlay without emitting warnings.
 
 ### Why
@@ -260,6 +265,7 @@
 - At least one preference is persisted and restored (beyond window placement).
 - Device catalogue can refresh without restart and does not require starting capture.
 - Failure/absence cases (no devices, missing window-capture support) are represented without crashing.
+- Appearance preferences apply immediately and do not introduce layout glitches or QML warnings.
 
 ### Decisions
 
@@ -285,6 +291,7 @@
   - `AppSupervisor` now owns and exposes `preferences` and `deviceCatalogue` objects:
     - `modules/app/lifecycle/appsupervisor.h`, `modules/app/lifecycle/appsupervisor.cpp`, `modules/app/lifecycle/appsupervisor-dd.txt`
   - `AppSupervisor` also provides theme-icon availability checks for QML.
+  - `AppSupervisor` also provides a font family enumeration helper for QML.
 - Tests:
   - QML warning gate extended: `apps/unittests/qml/tst_qml_ui.cpp`
   - `tst_appsupervisor` now isolates `QSettings` to a temporary directory: `apps/unittests/app/lifecycle/tst_appsupervisor.cpp`
@@ -296,28 +303,138 @@
 - Settings documentation updated:
   - `docs/SETTINGS.md`
 
-### Temporary note (ongoing UI issues)
+### Temporary note (font picker hang + corrupted preview)
 
-The user reports the following issues in a real interactive run (not reproduced by `tst_qml_ui` under `QT_QPA_PLATFORM=offscreen`). These need follow-up:
+During interactive testing, a repeatable UI stall (multi-second hang that recovers) was observed in the font picker while dragging the scrollbar thumb. A corrupted preview render was also observed for some fonts.
 
-- Preferences overlay category switching/rendering:
-  - Symptoms: Devices category shows an empty right-hand pane (no header, no frames); a Refresh button appears on the wrong category.
-  - Repro: open Preferences, click the left “Devices” category.
-  - Suspects: QML layout/visibility logic in `apps/vcstream/qml/PreferencesOverlay.qml` and/or state synchronisation between `apps/vcstream/qml/main.qml` and `apps/vcstream/qml/PreferencesOverlay.qml`.
+What was done (temporary diagnostics)
+- A temporary, opt-in, fine-grained timing trace was implemented to capture GUI-thread stalls during font picker scroll-thumb drags.
+  - Enable: `VCSTREAM_TRACE_FONT_SCROLL=1`
+  - Output: `/tmp/vcstream-fontscroll-<pid>.log`
+  - Implementation (removed again after diagnosis):
+    - Logger: `apps/vcstream/perftrace.h`, `apps/vcstream/perftrace.cpp`
+    - Wiring: `apps/vcstream/main.cpp` (exposed `perfTrace` to QML)
+    - QML trace: `apps/vcstream/qml/VcFontPicker.qml` (16ms sampling while the thumb was pressed)
+- The tracer was iterated to correctly compute visible indices/families during scrolling (ListView `indexAt()` content coordinates).
 
-- Accent theme propagation:
-  - Symptoms: the accent swatch changes, but other controls that normally use the system accent keep using the system accent instead of the chosen accent.
-  - Key requirement: do not manually apply accent colour per-widget; accent must propagate through palette/style as intended.
-  - Suspects: palette inheritance through `StackView` pages rooted in plain `Item` trees; some controls may not be inheriting `ApplicationWindow.palette` in the live style/plugin.
+What was shown (evidence)
+- The hang is a real GUI-thread stall: log samples show large deltas (roughly ~1s to ~6s) while `barPressed=true`.
+- List model metrics remained stable during stalls (count/content height/viewport height did not thrash), arguing against a model rebuild as the primary cause.
+- After the tracer was corrected, stalls correlated strongly with a specific visible region of the list that contained Bitcount “Ink” font families (for example “Bitcount Grid Double Ink”).
+- Screenshots showed corrupted preview rendering for at least “Bitcount Grid Double Ink”.
+- The user confirmed other applications on the same system also struggle with “Bitcount Grid Double Ink”, suggesting the issue may be in the font itself and/or shared font rendering stack rather than vcstream-only.
 
-- Light theme inconsistencies:
-  - Symptoms: some surfaces remain dark and some text remains light when Light mode is selected.
-  - Suspects: incomplete palette role overrides and/or palette inheritance not reaching all controls.
+Additional technical investigation (evidence)
+- Font inspection on the affected system showed:
+  - “Bitcount Grid Double Ink” is a colour font (`color=true`) with COLR/CPAL tables and COLR version 1 (COLRv1), and is also a variable font (fvar axes present).
+  - Other colour fonts tested by the user (for example Bungee Color, Cairo Play, Noto Color Emoji, Aref Ruqaa Ink, Blaka Ink) did not reproduce the hang or corruption in vcstream.
 
-Notes for the next agent:
-- `tst_qml_ui` currently passes but does not guarantee style/plugin parity with the user's desktop (for example KDE/Breeze).
-- Consider adding a minimal on-screen debug readout (behind a temporary flag) of:
-  - `PreferencesOverlay.currentCategoryIndex`
-  - `appSupervisor.preferences.themeMode` / `accent`
-  - `ApplicationWindow.palette.highlight`
-  to confirm whether the state changes are not occurring vs not being applied by the style.
+What is still speculation (not proven)
+- The exact cause of the stall is not proven. A plausible hypothesis is that previewing sample text in certain fonts triggers expensive or buggy rendering/shaping paths that can block the GUI thread.
+
+What remains to be done (future work)
+- Design a robustness strategy that does not globally blacklist fonts based on one machine.
+  - Prefer adaptive behaviour: avoid blocking the GUI thread while previewing fonts (for example async/cached previews, throttling preview updates during thumb drag and search, and/or falling back per-font after detecting repeated stalls).
+- Reproduce and validate on multiple systems/Qt versions.
+
+Cleanup
+- The temporary tracing code described above has been removed after collecting logs, to avoid leaving diagnostic plumbing in production builds.
+
+## Task 1.4b — Add font preview render health cache
+
+### What
+
+- Added a UI-facing font render health cache that can check a font family and mark it as safe or unsafe for preview rendering on the current machine.
+- Wired the cache into the Preferences font picker so per-row previews only render with a candidate font after it passes the preview check.
+- Extended the Preferences “sample” preview box to suppress rendering when the selected font is known-bad for preview, whilst still allowing the font to be selected and persisted.
+
+### Why
+
+- Some fonts can render corrupted output (or trigger large stalls) in the underlying font stack without emitting Qt warnings or errors.
+- The font picker previously attempted to render sample text for many different font families during scroll, which can repeatedly hit the problematic path.
+- The UI needs a robustness strategy that is behaviour-based on the current machine and does not hardcode a global blacklist.
+
+### Acceptance criteria
+
+- The font picker can avoid repeatedly attempting per-row previews for fonts that the preview check classifies as corrupted.
+- The user can still select any font family (the cache is advisory and must not block selection).
+- UI changes introduce no QML warnings (QML warning hygiene gate remains green).
+
+### Decisions
+
+- Preflight is based on output sanity heuristics (small glyph render into a `QImage`) rather than timing thresholds, to avoid false positives due to transient CPU/scheduling variability.
+- The cache is advisory-only and is used by preview code; it does not gate persisted preference values.
+- Preflight work is run on a dedicated worker thread and results are cached per `(family, pixelSize)`.
+
+### Technical notes
+
+- New module:
+  - `modules/ui/fonts/fontpreviewsafetycache.h`
+  - `modules/ui/fonts/fontpreviewsafetycache.cpp`
+  - `modules/ui/fonts/fontpreviewsafetycache-dd.txt`
+- Supervisor wiring:
+  - `AppSupervisor` now owns and exposes `fontPreviewSafetyCache`: `modules/app/lifecycle/appsupervisor.h`, `modules/app/lifecycle/appsupervisor.cpp`, `modules/app/lifecycle/appsupervisor-dd.txt`
+- Preferences UI integration:
+  - `apps/vcstream/qml/VcFontPicker.qml`
+  - `apps/vcstream/qml/PreferencesOverlay.qml`
+- Build wiring:
+  - `modules/ui/fonts/CMakeLists.txt`
+  - `modules/CMakeLists.txt`
+  - `modules/app/lifecycle/CMakeLists.txt`
+- QML type registration (for enum visibility/debugging):
+  - `apps/vcstream/main.cpp`
+
+## Task 1.4c — Make font preview checks resilient and silhouette-based
+
+### What
+
+- Reworked the font preview health cache to use an outline silhouette comparison rather than simple pixel bounding heuristics.
+- Expanded the cache state model so the UI can distinguish:
+  - never checked
+  - checking in progress
+  - safe to preview
+  - preview output appears incorrect
+  - check timed out (inconclusive)
+  - check blocked because too many previous checks timed out
+- Updated the font picker preview UI to show user-facing status messages for these states and to only render per-row previews when the cache says the font is safe.
+
+### Why
+
+- Some fonts can produce corrupted raster output even for very small strings.
+- Simple sanity heuristics can misclassify corrupted output as "safe" at small preview sizes.
+- When the underlying font stack hangs, Qt does not provide a safe way to abort the operation within the same process.
+  The application must protect its UI without forcing unsafe thread termination.
+
+### Acceptance criteria
+
+- The font picker does not render per-row previews for fonts until the preview check succeeds.
+- If a check does not complete, the UI remains responsive and reports "Preview unavailable" rather than stalling.
+- QML warning gate remains green.
+
+### Decisions
+
+- The font preview check compares two renders of the same string:
+  - raster output via `QPainter::drawText`
+  - silhouette output via `QRawFont::pathForGlyph`
+  It then computes a mask similarity score (IoU) to classify safe vs incorrect.
+- Timeouts are treated as inconclusive (`TimedOut`), not as "bad font".
+- Checks are run on per-check worker threads. Threads that time out are treated as potentially stuck and are not forcibly terminated.
+- To cap worst-case resource growth when the font stack hangs, the cache blocks starting new checks once a fixed number of timeouts has been reached.
+  Blocked entries may be retried later when checks are requested again.
+
+### Technical notes
+
+- Cache implementation updates:
+  - `modules/ui/fonts/fontpreviewsafetycache.h`
+  - `modules/ui/fonts/fontpreviewsafetycache.cpp`
+  - `modules/ui/fonts/fontpreviewsafetycache-dd.txt`
+  - `modules/ui/fonts/fontpreviewsafetychecker.h`
+  - `modules/ui/fonts/fontpreviewsafetychecker.cpp`
+  - `VCSTREAM_FONT_PREVIEW_SAFETY_DEFAULT_MAX_STUCK_CHECKS` is a single source-level constant.
+- UI updates:
+  - `apps/vcstream/qml/VcFontPicker.qml`
+  - `apps/vcstream/qml/PreferencesOverlay.qml`
+
+- Unit tests:
+  - Added deterministic tests for the cache state machine using an injected fake checker:
+    - `apps/unittests/ui/fonts/tst_fontpreviewsafetycache.cpp`

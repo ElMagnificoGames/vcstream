@@ -10,6 +10,10 @@ class AppPreferences final : public QObject
     Q_PROPERTY( QString displayName READ displayName WRITE setDisplayName NOTIFY displayNameChanged )
     Q_PROPERTY( QString themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged )
     Q_PROPERTY( QString accent READ accent WRITE setAccent NOTIFY accentChanged )
+    Q_PROPERTY( QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY fontFamilyChanged )
+    Q_PROPERTY( int fontScalePercent READ fontScalePercent WRITE setFontScalePercent NOTIFY fontScalePercentChanged )
+    Q_PROPERTY( QString density READ density WRITE setDensity NOTIFY densityChanged )
+    Q_PROPERTY( int zoomPercent READ zoomPercent WRITE setZoomPercent NOTIFY zoomPercentChanged )
     Q_PROPERTY( double customAccentLightness READ customAccentLightness WRITE setCustomAccentLightness NOTIFY customAccentLightnessChanged )
     Q_PROPERTY( double customAccentChroma READ customAccentChroma WRITE setCustomAccentChroma NOTIFY customAccentChromaChanged )
     Q_PROPERTY( double customAccentHueDegrees READ customAccentHueDegrees WRITE setCustomAccentHueDegrees NOTIFY customAccentHueDegreesChanged )
@@ -26,6 +30,18 @@ public:
     QString accent() const;
     void setAccent( const QString &accent );
 
+    QString fontFamily() const;
+    void setFontFamily( const QString &family );
+
+    int fontScalePercent() const;
+    void setFontScalePercent( int percent );
+
+    QString density() const;
+    void setDensity( const QString &density );
+
+    int zoomPercent() const;
+    void setZoomPercent( int percent );
+
     double customAccentLightness() const;
     void setCustomAccentLightness( double lightness );
 
@@ -40,6 +56,10 @@ Q_SIGNALS:
 
     void themeModeChanged();
     void accentChanged();
+    void fontFamilyChanged();
+    void fontScalePercentChanged();
+    void densityChanged();
+    void zoomPercentChanged();
     void customAccentLightnessChanged();
     void customAccentChromaChanged();
     void customAccentHueDegreesChanged();
@@ -52,6 +72,10 @@ private:
     QString m_displayName;
     QString m_themeMode;
     QString m_accent;
+    QString m_fontFamily;
+    int m_fontScalePercent;
+    QString m_density;
+    int m_zoomPercent;
     double m_customAccentLightness;
     double m_customAccentChroma;
     double m_customAccentHueDegrees;

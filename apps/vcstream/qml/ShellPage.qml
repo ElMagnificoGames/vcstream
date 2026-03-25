@@ -121,7 +121,7 @@ Page {
 
         ToolBar {
             Layout.fillWidth: true
-            contentHeight: 56
+            contentHeight: ( theme ? theme.toolbarHeight : 56 )
 
             background: Rectangle {
                 color: ( theme ? theme.panelColour : pal.base )
@@ -139,15 +139,15 @@ Page {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                anchors.topMargin: 6
-                anchors.bottomMargin: 6
-                spacing: 12
+                anchors.leftMargin: ( theme ? theme.spaceTight : 10 )
+                anchors.rightMargin: ( theme ? theme.spaceTight : 10 )
+                anchors.topMargin: ( theme ? theme.spaceNudge : 6 )
+                anchors.bottomMargin: ( theme ? theme.spaceNudge : 6 )
+                spacing: ( theme ? theme.spaceTight : 12 )
 
                 Label {
                     text: "vcstream"
-                    font.pixelSize: 18
+                    font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
                     color: ( theme ? theme.textColour : pal.text )
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -216,8 +216,8 @@ Page {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 10
+                    anchors.margins: ( theme ? theme.spaceTight : 10 )
+                    spacing: ( theme ? theme.spaceTight : 10 )
 
                     VcPanel {
                         Layout.fillWidth: true
@@ -231,7 +231,7 @@ Page {
 
                             Label {
                                 text: "Participants"
-                                font.pixelSize: 14
+                                font.pixelSize: ( theme ? theme.fontBasePx : 14 )
                                 color: ( theme ? theme.textColour : pal.text )
                             }
 
@@ -252,7 +252,7 @@ Page {
 
                     VcPanel {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 200
+                        Layout.preferredHeight: ( theme && theme.macroPx ? theme.macroPx( 200 ) : 200 )
                         theme: root.theme
                         accentRole: "tertiary"
 
@@ -262,7 +262,7 @@ Page {
 
                             Label {
                                 text: "Sources"
-                                font.pixelSize: 14
+                                font.pixelSize: ( theme ? theme.fontBasePx : 14 )
                                 color: ( theme ? theme.textColour : pal.text )
                             }
 
@@ -283,14 +283,14 @@ Page {
 
                                 ListView {
                                     anchors.fill: parent
-                                    anchors.margins: 8
+                                    anchors.margins: ( theme ? theme.spaceCompact : 8 )
                                     clip: true
                                     model: sourceModel
                                     spacing: 6
 
                                     delegate: Rectangle {
                                         width: ListView.view.width
-                                        height: 34
+                                        height: ( theme ? theme.compactControlHeight : 34 )
                                         radius: 6
                                         color: tintSofter
 
@@ -298,8 +298,8 @@ Page {
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.margins: 8
-                                            spacing: 10
+                                            anchors.margins: ( theme ? theme.spaceCompact : 8 )
+                                            spacing: ( theme ? theme.spaceTight : 10 )
 
                                             Label {
                                                 text: name
@@ -344,7 +344,7 @@ Page {
 
                 VcPanel {
                     anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.margins: ( theme ? theme.spaceTight : 10 )
                     theme: root.theme
                     accentRole: "primary"
 
@@ -361,7 +361,7 @@ Page {
                             Label {
                                 anchors.centerIn: parent
                                 text: "Stage / Participant Grid"
-                                font.pixelSize: 18
+                                font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
                                 color: ( theme ? theme.metaTextColour : pal.mid )
                             }
                         }
@@ -389,8 +389,8 @@ Page {
                                 id: sourceInspectorPanel
                                 objectName: "sourceInspectorPanel"
                                 anchors.centerIn: parent
-                                width: Math.min( parent.width * 0.92, 560 )
-                                height: Math.min( parent.height * 0.85, 420 )
+                                width: Math.min( parent.width * 0.92, ( theme && theme.macroPx ? theme.macroPx( 560 ) : 560 ) )
+                                height: Math.min( parent.height * 0.85, ( theme && theme.macroPx ? theme.macroPx( 420 ) : 420 ) )
                                 theme: root.theme
                                 accentRole: "secondary"
 
@@ -411,7 +411,7 @@ Page {
 
                                         Label {
                                             text: ( root.selectedSourceName.length > 0 ? root.selectedSourceName : "Source" )
-                                            font.pixelSize: 18
+                                            font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
                                             Layout.fillWidth: true
                                             elide: Text.ElideRight
                                         }
@@ -450,7 +450,7 @@ Page {
 
                                             Label {
                                                 text: "Details"
-                                                font.pixelSize: 14
+                                                font.pixelSize: ( theme ? theme.fontBasePx : 14 )
                                             }
 
                                             Label {
@@ -510,8 +510,8 @@ Page {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 10
+                    anchors.margins: ( theme ? theme.spaceTight : 10 )
+                    spacing: ( theme ? theme.spaceTight : 10 )
 
                     VcTabBar {
                         id: rightTabs
@@ -539,7 +539,7 @@ Page {
 
                                 Label {
                                     text: "Chat"
-                                    font.pixelSize: 14
+                                    font.pixelSize: ( theme ? theme.fontBasePx : 14 )
                                     color: ( theme ? theme.textColour : pal.text )
                                 }
 
@@ -577,7 +577,7 @@ Page {
 
                                 Label {
                                     text: "Diagnostics"
-                                    font.pixelSize: 14
+                                    font.pixelSize: ( theme ? theme.fontBasePx : 14 )
                                     color: ( theme ? theme.textColour : pal.text )
                                 }
 
@@ -602,7 +602,7 @@ Page {
 
         ToolBar {
             Layout.fillWidth: true
-            contentHeight: 30
+            contentHeight: ( theme ? theme.statusBarHeight : 30 )
 
             background: Rectangle {
                 color: ( theme ? theme.panelColour : pal.base )
@@ -612,8 +612,8 @@ Page {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 10
+                anchors.margins: ( theme ? theme.spaceTight : 10 )
+                spacing: ( theme ? theme.spaceTight : 10 )
 
                 Label {
                     text: ( appSupervisor ? ( "Version " + appSupervisor.appVersion ) : "" )

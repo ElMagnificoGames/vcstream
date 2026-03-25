@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 class AppSupervisor final : public QObject
 {
@@ -12,6 +13,8 @@ class AppSupervisor final : public QObject
     Q_PROPERTY( bool hostRoomEnabled READ hostRoomEnabled WRITE setHostRoomEnabled NOTIFY hostRoomEnabledChanged )
     Q_PROPERTY( QObject *preferences READ preferences CONSTANT )
     Q_PROPERTY( QObject *deviceCatalogue READ deviceCatalogue CONSTANT )
+    Q_PROPERTY( QObject *fontPreviewSafetyCache READ fontPreviewSafetyCache CONSTANT )
+    Q_PROPERTY( QString systemFontFamily READ systemFontFamily CONSTANT )
 
 public:
     explicit AppSupervisor( QObject *parent = nullptr );
@@ -26,8 +29,11 @@ public:
 
     QObject *preferences() const;
     QObject *deviceCatalogue() const;
+    QObject *fontPreviewSafetyCache() const;
+    QString systemFontFamily() const;
 
     Q_INVOKABLE bool themeIconAvailable( const QString &name ) const;
+    Q_INVOKABLE QStringList fontFamilies() const;
 
 Q_SIGNALS:
     void joinRoomEnabledChanged();
@@ -42,6 +48,7 @@ private:
 
     QObject *m_preferences;
     QObject *m_deviceCatalogue;
+    QObject *m_fontPreviewSafetyCache;
 };
 
 #endif

@@ -10,6 +10,7 @@ Control {
     property int currentCategoryIndex: 0
     property var appPalette
     property var theme
+    property var fontFamiliesCache: []
 
     signal closeRequested()
 
@@ -24,11 +25,19 @@ Control {
         if ( open && appSupervisor && appSupervisor.deviceCatalogue ) {
             appSupervisor.deviceCatalogue.refresh()
         }
+
+        if ( open && appSupervisor && appSupervisor.fontFamilies ) {
+            fontFamiliesCache = appSupervisor.fontFamilies()
+        }
     }
 
     onCurrentCategoryIndexChanged: {
         if ( open && currentCategoryIndex === 1 && appSupervisor && appSupervisor.deviceCatalogue ) {
             appSupervisor.deviceCatalogue.refresh()
+        }
+
+        if ( open && currentCategoryIndex === 0 && appSupervisor && appSupervisor.fontFamilies ) {
+            fontFamiliesCache = appSupervisor.fontFamilies()
         }
     }
 
@@ -89,7 +98,7 @@ Control {
 
                             Label {
                                 text: "Display name"
-                                font.pixelSize: 14
+                                font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
                                 color: ( root.theme ? root.theme.textColour : root.pal.text )
                             }
 
@@ -119,9 +128,217 @@ Control {
                             spacing: ( root.theme ? root.theme.spaceCompact : 8 )
 
                             Label {
-                                text: "Accessibility"
-                                font.pixelSize: 14
+                                text: "Appearance"
+                                font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
                                 color: ( root.theme ? root.theme.textColour : root.pal.text )
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                Label {
+                                    text: "Font"
+                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                }
+
+                                VcFontPicker {
+                                    id: fontFamilyPicker
+                                    objectName: "preferencesFontFamilyPicker"
+                                    theme: root.theme
+                                    appPalette: root.appPalette
+                                    fontPreviewSafetyCache: ( appSupervisor ? appSupervisor.fontPreviewSafetyCache : null )
+                                    systemFontFamily: ( appSupervisor ? appSupervisor.systemFontFamily : "" )
+                                    Layout.fillWidth: true
+                                    families: root.fontFamiliesCache
+                                    value: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontFamily : "" )
+                                    sampleText: "Aa Bb Cc Dd Ee Ff 0123456789"
+
+                                    onValueSelected: function( v ) {
+                                        if ( appSupervisor && appSupervisor.preferences ) {
+                                            appSupervisor.preferences.fontFamily = v
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                objectName: "preferencesFontSampleBox"
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: ( root.theme ? root.theme.controlHeight : 42 )
+                                radius: ( root.theme ? root.theme.controlRadius : 10 )
+                                color: ( root.theme ? root.theme.panelInsetColour : root.pal.base )
+                                border.color: ( root.theme ? root.theme.frameColour : root.pal.mid )
+                                border.width: 1
+                                clip: true
+
+                                Label {
+                                    id: fontSampleLabel
+                                    anchors.fill: parent
+                                    anchors.margins: ( root.theme ? root.theme.spaceCompact : 8 )
+                                    wrapMode: Text.NoWrap
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 1
+                                    verticalAlignment: Text.AlignVCenter
+                                    readonly property string selectedFamily: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontFamily : "" )
+
+                                    property int vcHealthSerial: 0
+
+                                    readonly property int vcSelectedStatus: {
+                                        var _ = vcHealthSerial
+                                        if ( appSupervisor && appSupervisor.fontPreviewSafetyCache && selectedFamily.length > 0 ) {
+                                            return appSupervisor.fontPreviewSafetyCache.statusForFamily( selectedFamily, ( root.theme ? root.theme.fontBasePx : 14 ) )
+                                        }
+                                        return 2
+                                    }
+
+                                    function vcEnsureChecked() {
+                                        if ( appSupervisor && appSupervisor.fontPreviewSafetyCache && selectedFamily.length > 0 ) {
+                                            appSupervisor.fontPreviewSafetyCache.requestCheck( selectedFamily, ( root.theme ? root.theme.fontBasePx : 14 ) )
+                                        }
+                                    }
+
+                                    Component.onCompleted: vcEnsureChecked()
+                                    onSelectedFamilyChanged: vcEnsureChecked()
+
+                                    Connections {
+                                        target: ( appSupervisor ? appSupervisor.fontPreviewSafetyCache : null )
+
+                                        function onStatusChanged( family, pixelSize, status ) {
+                                            fontSampleLabel.vcHealthSerial = fontSampleLabel.vcHealthSerial + 1
+                                        }
+                                    }
+
+                                    text: {
+                                        if ( vcSelectedStatus === 1 ) return "Checking preview..."
+                                        if ( vcSelectedStatus === 3 ) return "Preview unavailable: this font may not render correctly on this device"
+                                        if ( vcSelectedStatus === 4 ) return "Preview unavailable right now"
+                                        if ( vcSelectedStatus === 5 ) return "Preview paused to keep the app responsive"
+                                        return "Aa Bb Cc Dd Ee Ff 0123456789"
+                                    }
+                                    color: ( vcSelectedStatus === 3 || vcSelectedStatus === 4 || vcSelectedStatus === 5 )
+                                        ? ( root.theme ? root.theme.dangerColour : root.pal.text )
+                                        : ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                    font.family: ( vcSelectedStatus === 2 && selectedFamily.length > 0 )
+                                        ? selectedFamily
+                                        : ( appSupervisor ? appSupervisor.systemFontFamily : Qt.application.font.family )
+                                    font.bold: ( vcSelectedStatus === 3 || vcSelectedStatus === 4 || vcSelectedStatus === 5 )
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: ( root.theme ? root.theme.spaceNudge : 4 )
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                    Label {
+                                        text: "Font size"
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                    }
+
+                                    Label {
+                                        text: ( appSupervisor && appSupervisor.preferences ? ( appSupervisor.preferences.fontScalePercent + "%" ) : "" )
+                                        color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                    }
+                                }
+
+                                VcSlider {
+                                    objectName: "preferencesFontScaleSlider"
+                                    theme: root.theme
+                                    Layout.fillWidth: true
+                                    from: 75
+                                    to: 150
+                                    stepSize: 5
+                                    snapMode: Slider.SnapAlways
+                                    value: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontScalePercent : 100 )
+
+                                    onMoved: {
+                                        if ( appSupervisor && appSupervisor.preferences ) {
+                                            appSupervisor.preferences.fontScalePercent = Math.round( value )
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                Label {
+                                    text: "Density"
+                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                }
+
+                                VcComboBox {
+                                    id: densityCombo
+                                    objectName: "preferencesDensityCombo"
+                                    theme: root.theme
+                                    Layout.fillWidth: true
+                                    model: ["Compact", "Comfortable", "Spacious"]
+                                    currentIndex: indexForDensityValue( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.density : "comfortable" )
+
+                                    function densityValueForIndex( idx ) {
+                                        if ( idx === 0 ) return "compact"
+                                        if ( idx === 2 ) return "spacious"
+                                        return "comfortable"
+                                    }
+
+                                    function indexForDensityValue( v ) {
+                                        if ( v === "compact" ) return 0
+                                        if ( v === "spacious" ) return 2
+                                        return 1
+                                    }
+
+                                    onActivated: {
+                                        if ( appSupervisor && appSupervisor.preferences ) {
+                                            appSupervisor.preferences.density = densityValueForIndex( currentIndex )
+                                        }
+                                    }
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: ( root.theme ? root.theme.spaceNudge : 4 )
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                    Label {
+                                        text: "Zoom"
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                    }
+
+                                    Label {
+                                        text: ( appSupervisor && appSupervisor.preferences ? ( appSupervisor.preferences.zoomPercent + "%" ) : "" )
+                                        color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                    }
+                                }
+
+                                VcSlider {
+                                    objectName: "preferencesZoomSlider"
+                                    theme: root.theme
+                                    Layout.fillWidth: true
+                                    from: 50
+                                    to: 200
+                                    stepSize: 5
+                                    snapMode: Slider.SnapAlways
+                                    value: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.zoomPercent : 100 )
+
+                                    onMoved: {
+                                        if ( appSupervisor && appSupervisor.preferences ) {
+                                            appSupervisor.preferences.zoomPercent = Math.round( value )
+                                        }
+                                    }
+                                }
                             }
 
                         }
@@ -138,7 +355,7 @@ Control {
 
                             Label {
                                 text: "Theme"
-                                font.pixelSize: 14
+                                font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
                                 color: ( root.theme ? root.theme.textColour : root.pal.text )
                             }
 
@@ -374,7 +591,7 @@ Control {
 
                     Label {
                         text: "Local devices"
-                        font.pixelSize: 14
+                        font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                         color: ( root.theme ? root.theme.textColour : root.pal.text )
@@ -485,7 +702,7 @@ Control {
 
                                         Label {
                                             text: deviceSectionCard.sectionData.title
-                                            font.pixelSize: 14
+                                            font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
                                             color: ( root.theme ? root.theme.textColour : root.pal.text )
                                         }
 
@@ -572,7 +789,7 @@ Control {
 
                 Label {
                     text: "Preferences"
-                    font.pixelSize: 18
+                    font.pixelSize: ( root.theme ? root.theme.fontHeadingPx : 18 )
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     color: ( root.theme ? root.theme.textColour : root.pal.text )
@@ -591,13 +808,13 @@ Control {
                 spacing: ( root.theme ? root.theme.spaceTight : 12 )
 
                 VcPanel {
-                    Layout.preferredWidth: 220
-                    Layout.minimumWidth: 180
-                    Layout.maximumWidth: 260
+                    Layout.preferredWidth: ( root.theme && root.theme.macroPx ? root.theme.macroPx( 220 ) : 220 )
+                    Layout.minimumWidth: ( root.theme && root.theme.macroPx ? root.theme.macroPx( 180 ) : 180 )
+                    Layout.maximumWidth: ( root.theme && root.theme.macroPx ? root.theme.macroPx( 260 ) : 260 )
                     Layout.fillHeight: true
                     theme: root.theme
                     inset: true
-                    padding: 8
+                    padding: ( root.theme ? root.theme.spaceCompact : 8 )
 
                     ListModel {
                         id: categoryModel
@@ -609,14 +826,14 @@ Control {
                         objectName: "preferencesCategoryList"
                         anchors.fill: parent
                         clip: true
-                        spacing: 6
+                        spacing: ( root.theme ? root.theme.spaceNudge : 6 )
                         model: categoryModel
                         currentIndex: root.currentCategoryIndex
 
                         delegate: Rectangle {
                             objectName: model.objectName
                             width: ListView.view.width
-                            height: 42
+                            height: ( root.theme ? root.theme.controlHeight : 42 )
                             radius: ( root.theme ? root.theme.controlRadius : 10 )
                             color: ListView.isCurrentItem
                                 ? ( root.theme ? root.theme.tertiaryAccentColour : root.pal.highlight )

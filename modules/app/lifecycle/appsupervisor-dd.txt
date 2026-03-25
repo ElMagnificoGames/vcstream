@@ -33,11 +33,22 @@ State model:
 
 - `QObject *preferences() const` returns the application preferences object.
 - `QObject *deviceCatalogue() const` returns the local device catalogue object.
+- `QObject *fontPreviewSafetyCache() const` returns the font preview safety cache.
 
   Ownership:
   - Returned pointers are owned by `AppSupervisor` (QObject parented to it) and remain valid for the supervisor's lifetime.
 
 - `bool themeIconAvailable( const QString &name ) const` returns whether a named theme icon is available.
+
+- `QStringList fontFamilies() const` returns available font family names installed on the system.
+  - Intended for populating QML font selection UI.
+
+- `QString systemFontFamily() const` returns the platform's general system UI font family.
+  - Intended for rendering fallback UI copy when the user-selected app font renders incorrectly.
+
+- `QObject *fontPreviewSafetyCache() const` returns a UI-facing cache that can check whether a font can be preview-rendered safely.
+  - Intended for use by the font picker to avoid repeatedly attempting previews that are known to render incorrectly on this machine.
+  - Non-goal: this cache must not prevent the user selecting a font; it is only advisory.
 
 Signals:
 - `joinRoomEnabledChanged()` is emitted when `joinRoomEnabled` changes.

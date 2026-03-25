@@ -42,8 +42,12 @@ Properties (QML-facing):
 
 - `QString windowCaptureStatus` is an explanatory message when window enumeration is unavailable, otherwise an empty string.
 
-Commands:
-- `void refresh()` re-enumerates all device categories and updates the properties.
+ Commands:
+ - `void refresh()` re-enumerates all device categories and updates the properties.
+
+   Environment:
+   - If the environment variable `VCSTREAM_DISABLE_MEDIA_ENUM` is set to `1`, `true`, or `yes`, `refresh()` does not enumerate devices.
+     - It clears all device lists and sets `windowCaptureStatus` to "Device enumeration is disabled.".
 
 Signals:
 - `screensChanged()` is emitted when `screens` changes.
@@ -66,6 +70,7 @@ Errors:
 - Screens are sourced from `QGuiApplication::screens()`.
 - Camera and audio devices are sourced from `QMediaDevices`.
 - Capturable windows are sourced from `QWindowCapture` where Qt provides the API; otherwise `windowCaptureStatus` reports the limitation.
+- Device enumeration can be disabled for testing/CI via `VCSTREAM_DISABLE_MEDIA_ENUM`.
 
 == Requirements
 

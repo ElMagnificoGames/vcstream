@@ -12,6 +12,10 @@ Current persisted settings (skeleton):
 
 - Preferences:
   - `ui/profile/displayName`
+  - `ui/appearance/fontFamily`
+  - `ui/appearance/fontScalePercent`
+  - `ui/appearance/density`
+  - `ui/appearance/zoomPercent`
   - `ui/theme/mode`
   - `ui/theme/accent`
   - `ui/theme/customAccentLightness`

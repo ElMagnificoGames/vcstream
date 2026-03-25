@@ -42,6 +42,13 @@ The binary is written to `build/bin/`.
 ./build/bin/vcstream
 ```
 
+## Internal tools
+
+This repository includes some developer-only diagnostics that are not built by default.
+
+- Enable: `-DVCSTREAM_BUILD_INTERNAL_TOOLS=ON`
+- Documentation: `docs/INTERNAL-TOOLS.md`
+
 ## Settings
 
 Settings persistence notes (including storage location) are documented in `docs/SETTINGS.md`.

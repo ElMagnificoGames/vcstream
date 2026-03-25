@@ -1,10 +1,14 @@
 #include "modules/app/lifecycle/appsupervisor.h"
 
+#include <algorithm>
+
 #include <QCoreApplication>
+#include <QFontDatabase>
 #include <QIcon>
 
 #include "modules/app/devices/localdevicecatalogue.h"
 #include "modules/app/settings/apppreferences.h"
+#include "modules/ui/fonts/fontpreviewsafetycache.h"
 
 AppSupervisor::AppSupervisor( QObject *parent )
     : QObject( parent )
@@ -14,6 +18,7 @@ AppSupervisor::AppSupervisor( QObject *parent )
 
     m_preferences = new AppPreferences( this );
     m_deviceCatalogue = new LocalDeviceCatalogue( this );
+    m_fontPreviewSafetyCache = new FontPreviewSafetyCache( this );
 }
 
 QString AppSupervisor::appVersion() const
@@ -71,6 +76,11 @@ QObject *AppSupervisor::deviceCatalogue() const
     return m_deviceCatalogue;
 }
 
+QObject *AppSupervisor::fontPreviewSafetyCache() const
+{
+    return m_fontPreviewSafetyCache;
+}
+
 bool AppSupervisor::themeIconAvailable( const QString &name ) const
 {
     bool out;
@@ -82,4 +92,22 @@ bool AppSupervisor::themeIconAvailable( const QString &name ) const
     }
 
     return out;
+}
+
+QStringList AppSupervisor::fontFamilies() const
+{
+    QFontDatabase db;
+    QStringList out = db.families();
+
+    std::sort( out.begin(), out.end(), []( const QString &a, const QString &b ) {
+        return a.compare( b, Qt::CaseInsensitive ) < 0;
+    } );
+
+    out.removeDuplicates();
+    return out;
+}
+
+QString AppSupervisor::systemFontFamily() const
+{
+    return QFontDatabase::systemFont( QFontDatabase::GeneralFont ).family();
 }

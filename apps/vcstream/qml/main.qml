@@ -51,19 +51,67 @@ ApplicationWindow {
         readonly property string mode: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.themeMode : "system" )
         readonly property string accent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.accent : "system" )
 
-        readonly property int spaceNudge: 4
-        readonly property int spaceCompact: 8
-        readonly property int spaceTight: 12
-        readonly property int spaceBase: 16
-        readonly property int spaceRelaxed: 24
+        readonly property string fontFamily: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontFamily : "" )
+        readonly property int fontScalePercent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.fontScalePercent : 100 )
+        readonly property string density: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.density : "comfortable" )
+        readonly property int zoomPercent: ( appSupervisor && appSupervisor.preferences ? appSupervisor.preferences.zoomPercent : 100 )
+
+        readonly property real zoomScale: Math.max( 0.5, Math.min( 2.0, zoomPercent / 100.0 ) )
+        readonly property real fontScale: Math.max( 0.75, Math.min( 1.5, fontScalePercent / 100.0 ) )
+
+        readonly property real densityScale: {
+            if ( density === "compact" ) return 0.86
+            if ( density === "spacious" ) return 1.22
+            return 1.0
+        }
+
+        // Macro layout constraints should not follow zoom, but should respond to density.
+        // Compact density means less negative space, so allow larger macro extents.
+        function macroPx( basePx ) {
+            return Math.max( 1, Math.round( basePx / densityScale ) )
+        }
+
+        function uiPx( basePx ) {
+            return Math.max( 1, Math.round( basePx * zoomScale ) )
+        }
+
+        function spacePx( basePx ) {
+            return Math.max( 1, Math.round( basePx * zoomScale * densityScale ) )
+        }
+
+        function fontPx( basePx ) {
+            return Math.max( 1, Math.round( basePx * zoomScale * fontScale ) )
+        }
+
+        readonly property int baseFontPxUnscaled: {
+            var px = Qt.application.font.pixelSize
+            if ( px === undefined || px === null || px <= 0 ) {
+                px = 14
+            }
+            return px
+        }
+
+        readonly property int fontBasePx: fontPx( baseFontPxUnscaled )
+        readonly property int fontSmallPx: Math.max( 10, fontPx( Math.max( 10, baseFontPxUnscaled - 2 ) ) )
+        readonly property int fontHeadingPx: Math.max( fontBasePx + 2, Math.round( fontBasePx * 1.28 ) )
+        readonly property int fontTitlePx: Math.max( fontHeadingPx + 6, Math.round( fontBasePx * 2.0 ) )
+
+        readonly property int spaceNudge: spacePx( 4 )
+        readonly property int spaceCompact: spacePx( 8 )
+        readonly property int spaceTight: spacePx( 12 )
+        readonly property int spaceBase: spacePx( 16 )
+        readonly property int spaceRelaxed: spacePx( 24 )
         readonly property int lineThin: 1
         readonly property int lineMed: 2
-        readonly property int insetGap: 3
-        readonly property int panelRadius: 8
-        readonly property int controlRadius: 10
-        readonly property int panelPadding: 14
-        readonly property int controlHeight: 42
-        readonly property int compactControlHeight: 34
+        readonly property int insetGap: Math.max( 2, spacePx( 3 ) )
+        readonly property int panelRadius: uiPx( 8 )
+        readonly property int controlRadius: uiPx( 10 )
+        readonly property int panelPadding: spacePx( 14 )
+
+        readonly property int controlHeight: uiPx( 42 )
+        readonly property int compactControlHeight: uiPx( 34 )
+        readonly property int toolbarHeight: uiPx( 56 )
+        readonly property int statusBarHeight: uiPx( 30 )
 
         function blend( a, b, t ) {
             var tt = Math.max( 0.0, Math.min( 1.0, t ) )
@@ -386,6 +434,9 @@ ApplicationWindow {
     palette.linkVisited: uiTheme.linkVisitedColour
     palette.toolTipBase: uiTheme.toolTipBaseColour
     palette.toolTipText: uiTheme.toolTipTextColour
+
+    font.family: ( uiTheme.fontFamily && uiTheme.fontFamily.length > 0 ) ? uiTheme.fontFamily : Qt.application.font.family
+    font.pixelSize: uiTheme.fontBasePx
 
     property bool preferencesOpen: false
 

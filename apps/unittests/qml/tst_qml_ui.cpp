@@ -14,6 +14,8 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <cmath>
 #include <QGuiApplication>
 #include <QObject>
 #include <QPalette>
@@ -49,6 +51,7 @@
 #include "modules/ui/colour/oklchutil.h"
 #include "modules/ui/placement/windowplacement.h"
 #include "modules/ui/theme/accentimageprovider.h"
+#include "modules/ui/theme/themeiconimageprovider.h"
 
 namespace {
 
@@ -589,15 +592,13 @@ void verifyScrollBarsAreNotDegenerate( QQuickWindow &window, QQuickItem *rootIte
         const QString baseUrl = QQmlEngine::contextForObject( item ) != nullptr
             ? QQmlEngine::contextForObject( item )->baseUrl().toString()
             : QString();
-        if ( baseUrl != QStringLiteral( "qrc:/qml/VcScrollBar.qml" )
-            && baseUrl != QStringLiteral( "qrc:/qml/VcFlickScrollBar.qml" ) ) {
+        if ( baseUrl != QStringLiteral( "qrc:/qml/VcScrollBar.qml" ) ) {
             continue;
         }
 
         const QString className = QString::fromLatin1( item->metaObject()->className() );
         const bool isQmlScrollBar = className.startsWith( QStringLiteral( "QQuickScrollBar" ), Qt::CaseSensitive );
-        const bool isFlickBar = ( baseUrl == QStringLiteral( "qrc:/qml/VcFlickScrollBar.qml" ) );
-        if ( !isQmlScrollBar && !isFlickBar ) {
+        if ( !isQmlScrollBar ) {
             continue;
         }
 
@@ -748,6 +749,170 @@ void verifyNoVisibleTextOverlaps( QQuickItem *rootItem, const char *step )
             const QString message =
                 QStringLiteral( "Overlapping visible text items at %1: A(text=%2 baseUrl=%3) B(text=%4 baseUrl=%5)" )
                     .arg( QString::fromLatin1( step ) )
+                    .arg( a->property( "text" ).toString() )
+                    .arg( baseA )
+                    .arg( b->property( "text" ).toString() )
+                    .arg( baseB );
+
+            QFAIL( qPrintable( message ) );
+        }
+    }
+}
+
+namespace {
+
+QQuickItem *nearestAncestorWithObjectNameSubstring( QQuickItem *item, const QString &needle )
+{
+    QQuickItem *cur;
+
+    cur = item;
+    while ( cur != nullptr ) {
+        if ( cur->objectName().contains( needle, Qt::CaseSensitive ) ) {
+            return cur;
+        }
+        cur = cur->parentItem();
+    }
+
+    return nullptr;
+}
+
+QQuickItem *nearestAncestorWithClassPrefix( QQuickItem *item, const QString &prefix )
+{
+    QQuickItem *cur;
+
+    cur = item;
+    while ( cur != nullptr ) {
+        const QString className = QString::fromLatin1( cur->metaObject()->className() );
+        if ( className.startsWith( prefix, Qt::CaseSensitive ) ) {
+            return cur;
+        }
+        cur = cur->parentItem();
+    }
+
+    return nullptr;
+}
+
+QString qmlBaseUrlForItem( QQuickItem *item )
+{
+    const QQmlContext *ctx;
+
+    ctx = ( item != nullptr ) ? QQmlEngine::contextForObject( item ) : nullptr;
+    return ( ctx != nullptr ) ? ctx->baseUrl().toString() : QString();
+}
+
+bool shouldIgnoreTextOverlapParticipation( QQuickItem *textItem )
+{
+    const QString baseUrl = qmlBaseUrlForItem( textItem );
+
+    // Help tips are overlays by design and can cover underlying UI.
+    if ( baseUrl.contains( QStringLiteral( "/HelpTip.qml" ), Qt::CaseSensitive ) ) {
+        return true;
+    }
+
+    return false;
+}
+
+QString textOverlapLayerKey( QQuickItem *textItem )
+{
+    if ( textItem == nullptr ) {
+        return QStringLiteral( "main" );
+    }
+
+    if ( nearestAncestorWithClassPrefix( textItem, QStringLiteral( "QQuickPopupItem" ) ) != nullptr ) {
+        QQuickItem *popupItem = nearestAncestorWithClassPrefix( textItem, QStringLiteral( "QQuickPopupItem" ) );
+        return QStringLiteral( "popup:%1" ).arg( QString::number( reinterpret_cast<quintptr>( popupItem ) ) );
+    }
+
+    // Treat modal overlays as separate layers so they don't fail on intentional coverage.
+    QQuickItem *overlay = nearestAncestorWithObjectNameSubstring( textItem, QStringLiteral( "Overlay" ) );
+    if ( overlay != nullptr ) {
+        const QString name = overlay->objectName();
+        if ( !name.isEmpty() ) {
+            return QStringLiteral( "overlay:%1" ).arg( name );
+        }
+    }
+
+    return QStringLiteral( "main" );
+}
+
+}
+
+void verifyNoVisibleTextOverlapsIgnoringOverlays( QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    QVector<QQuickItem *> texts;
+
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+
+        const QString className = QString::fromLatin1( item->metaObject()->className() );
+        if ( !className.startsWith( QStringLiteral( "QQuickText" ), Qt::CaseSensitive ) ) {
+            continue;
+        }
+        if ( !isEffectivelyVisible( item ) ) {
+            continue;
+        }
+        if ( shouldIgnoreTextOverlapParticipation( item ) ) {
+            continue;
+        }
+
+        const QString text = item->property( "text" ).toString();
+        if ( text.trimmed().isEmpty() ) {
+            continue;
+        }
+        if ( item->width() < 4.0 || item->height() < 4.0 ) {
+            continue;
+        }
+
+        texts.append( item );
+    }
+
+    for ( int i = 0; i < texts.size(); ++i ) {
+        QQuickItem *a = texts[i];
+        const QString layerA = textOverlapLayerKey( a );
+        const QRectF ra = scenePaintedTextRect( a );
+        if ( ra.isEmpty() ) {
+            continue;
+        }
+
+        for ( int j = i + 1; j < texts.size(); ++j ) {
+            QQuickItem *b = texts[j];
+
+            if ( a == b ) {
+                continue;
+            }
+            if ( a->parentItem() == b || b->parentItem() == a ) {
+                continue;
+            }
+
+            const QString layerB = textOverlapLayerKey( b );
+            if ( layerA != layerB ) {
+                continue;
+            }
+
+            const QRectF rb = scenePaintedTextRect( b );
+            if ( rb.isEmpty() ) {
+                continue;
+            }
+            const QRectF inter = ra.intersected( rb );
+            if ( inter.width() <= 2.0 || inter.height() <= 2.0 ) {
+                continue;
+            }
+
+            const QString baseA = qmlBaseUrlForItem( a );
+            const QString baseB = qmlBaseUrlForItem( b );
+
+            const QString message =
+                QStringLiteral( "Overlapping visible text items at %1 layer=%2: A(text=%3 baseUrl=%4) B(text=%5 baseUrl=%6)" )
+                    .arg( QString::fromLatin1( step ) )
+                    .arg( layerA )
                     .arg( a->property( "text" ).toString() )
                     .arg( baseA )
                     .arg( b->property( "text" ).toString() )
@@ -1038,6 +1203,8 @@ private Q_SLOTS:
     void style_projectDoesNotUseDefaultControlsDirectly();
     void style_projectDoesNotUseUnsupportedCanvasApis();
     void layout_noOverlapsInKeyScreens();
+    void appearancePreferences_extremes_noLayoutGlitches();
+    void text_noOverlapsInKeyFlows_ignoringOverlays();
     void layout_textContrastIsReadableInKeyScreens();
     void preferences_scrollbarAndWheelWork();
     void preferences_wheelOverComboBox_doesNotChangeSelection();
@@ -1093,6 +1260,7 @@ void tst_QmlUi::navigation_joinAndHost_emitNoWarnings()
         } );
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1218,6 +1386,7 @@ void tst_QmlUi::preferences_categorySwitchingShowsExpectedPane()
         } );
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1280,6 +1449,7 @@ void tst_QmlUi::themePreferences_propagatePaletteRolesToPages()
         } );
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1345,6 +1515,7 @@ void tst_QmlUi::style_projectDoesNotUseDefaultControlsDirectly()
         } );
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1407,6 +1578,7 @@ void tst_QmlUi::layout_noOverlapsInKeyScreens()
     }
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1435,7 +1607,7 @@ void tst_QmlUi::layout_noOverlapsInKeyScreens()
     failIfAnyWarnings( "layout-open-preferences" );
     clearMessages();
 
-    verifyNoVisibleTextOverlaps( rootItem, "preferences" );
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "preferences" );
     verifyNoInteractiveOverlaps( *window, rootItem, "preferences" );
     verifyInteractiveItemsContainedWithinParents( *window, rootItem, "preferences" );
     verifyScrollBarsAreNotDegenerate( *window, rootItem, "preferences" );
@@ -1455,6 +1627,271 @@ void tst_QmlUi::layout_noOverlapsInKeyScreens()
     verifyNoVisibleTextOverlaps( rootItem, "shell" );
     verifyNoInteractiveOverlaps( *window, rootItem, "shell" );
     verifyInteractiveItemsContainedWithinParents( *window, rootItem, "shell" );
+}
+
+void tst_QmlUi::appearancePreferences_extremes_noLayoutGlitches()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    if ( supervisor.preferences() != nullptr ) {
+        const QStringList families = QFontDatabase().families();
+        const QString family = families.isEmpty() ? QString() : families.first();
+
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "green" ) );
+        supervisor.preferences()->setProperty( "fontFamily", family );
+        supervisor.preferences()->setProperty( "fontScalePercent", 150 );
+        supervisor.preferences()->setProperty( "density", QStringLiteral( "spacious" ) );
+        supervisor.preferences()->setProperty( "zoomPercent", 200 );
+    }
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+
+    window->resize( 1600, 1000 );
+    QCoreApplication::processEvents();
+
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "appearance-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    verifyNoVisibleTextOverlaps( rootItem, "appearance-landing" );
+    verifyNoInteractiveOverlaps( *window, rootItem, "appearance-landing" );
+    verifyInteractiveItemsContainedWithinParents( *window, rootItem, "appearance-landing" );
+
+    QQuickItem *preferencesButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingPreferencesButton" ) );
+    QVERIFY2( preferencesButton != nullptr, "landingPreferencesButton" );
+    clickItemCenter( *window, preferencesButton );
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "appearance-open-preferences" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "appearance-preferences" );
+    verifyNoInteractiveOverlaps( *window, rootItem, "appearance-preferences" );
+    verifyInteractiveItemsContainedWithinParents( *window, rootItem, "appearance-preferences" );
+    verifyScrollBarsAreNotDegenerate( *window, rootItem, "appearance-preferences" );
+
+    QQuickItem *closeButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesCloseButton" ) );
+    QVERIFY2( closeButton != nullptr, "preferencesCloseButton" );
+    clickItemCenter( *window, closeButton );
+    QTest::qWait( 120 );
+
+    QQuickItem *joinRoomButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+    clickItemCenter( *window, joinRoomButton );
+    QTest::qWait( 200 );
+    failIfAnyWarnings( "appearance-go-shell" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlaps( rootItem, "appearance-shell" );
+    verifyNoInteractiveOverlaps( *window, rootItem, "appearance-shell" );
+    verifyInteractiveItemsContainedWithinParents( *window, rootItem, "appearance-shell" );
+}
+
+void tst_QmlUi::text_noOverlapsInKeyFlows_ignoringOverlays()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "custom" ) );
+        supervisor.preferences()->setProperty( "customAccentHueDegrees", 160.0 );
+        supervisor.preferences()->setProperty( "customAccentChroma", 0.18 );
+        supervisor.preferences()->setProperty( "customAccentLightness", 0.66 );
+        supervisor.preferences()->setProperty( "density", QStringLiteral( "comfortable" ) );
+        supervisor.preferences()->setProperty( "zoomPercent", 100 );
+    }
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "textflow-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-landing" );
+
+    QQuickItem *preferencesButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingPreferencesButton" ) );
+    QVERIFY2( preferencesButton != nullptr, "landingPreferencesButton" );
+    clickItemCenter( *window, preferencesButton );
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "textflow-open-preferences" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-preferences" );
+
+    // Open the font picker popup and verify overlaps inside the popup layer.
+    {
+        QQuickItem *pickerButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerButton" ) );
+        QVERIFY2( pickerButton != nullptr, "preferencesFontFamilyPickerButton" );
+        clickItemCenter( *window, pickerButton );
+        QTest::qWait( 160 );
+
+        QQuickItem *searchField = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerSearchField" ) );
+        QVERIFY2( searchField != nullptr, "preferencesFontFamilyPickerSearchField" );
+
+        // Guard against first-open rendering glitches.
+        {
+            QQuickItem *scrollBar = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerScrollBar" ) );
+            QVERIFY2( scrollBar != nullptr, "preferencesFontFamilyPickerScrollBar" );
+
+            if ( scrollBar->isVisible() ) {
+                const QRectF r = sceneRect( scrollBar );
+                QVERIFY2( r.width() >= 8.0 && r.height() >= 60.0, "font picker scrollbar geometry" );
+
+                const double minimumSize = scrollBar->property( "minimumSize" ).toDouble();
+                const double effectiveSize = scrollBar->property( "vcEffectiveSize" ).toDouble();
+                QVERIFY2( std::isfinite( minimumSize ) && minimumSize > 0.0, "scrollbar minimumSize" );
+                QVERIFY2( std::isfinite( effectiveSize ) && effectiveSize >= minimumSize, "scrollbar vcEffectiveSize" );
+
+                const double thumbLen = std::max( 6.0, r.height() * effectiveSize );
+                QVERIFY2( thumbLen >= 7.0, "font picker thumb should not be dot-sized" );
+            }
+        }
+
+        // The popup list should remain within the window so the scroll range is reachable.
+        {
+            QQuickItem *list = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerList" ) );
+            QVERIFY2( list != nullptr, "preferencesFontFamilyPickerList" );
+
+            const QRectF listRect = sceneRect( list );
+            const QRectF winRect( 0.0, 0.0, window->width(), window->height() );
+
+            // Allow a small tolerance for borders/shadows.
+            const QRectF tolWin = winRect.adjusted( -2.0, -2.0, 2.0, 2.0 );
+            QVERIFY2( tolWin.contains( listRect ), "font picker list should be fully on-screen" );
+        }
+
+        // Ensure the popup itself leaves a small bottom margin.
+        {
+            QQuickItem *bg = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerPopupBackground" ) );
+            QVERIFY2( bg != nullptr, "preferencesFontFamilyPickerPopupBackground" );
+
+            const QRectF bgRect = sceneRect( bg );
+            QVERIFY2( bgRect.bottom() <= window->height() - 4.0, "font picker popup should not sit flush with window bottom" );
+        }
+
+        // Ensure the list frame fits inside the popup background.
+        {
+            QQuickItem *bg = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerPopupBackground" ) );
+            QVERIFY2( bg != nullptr, "preferencesFontFamilyPickerPopupBackground" );
+            QQuickItem *frame = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesFontFamilyPickerListFrame" ) );
+            QVERIFY2( frame != nullptr, "preferencesFontFamilyPickerListFrame" );
+
+            const QRectF bgRect = sceneRect( bg );
+            const QRectF frameRect = sceneRect( frame );
+            const QRectF insetBg = bgRect.adjusted( 0.0, 0.0, 0.0, 1.0 );
+            QVERIFY2( insetBg.contains( frameRect ), "font picker list frame should not overflow popup" );
+        }
+
+        verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-font-picker" );
+
+        // Close the popup.
+        QTest::keyClick( window, Qt::Key_Escape );
+        QTest::qWait( 80 );
+        clearMessages();
+    }
+
+    QQuickItem *devicesCategory = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesCategoryDevices" ) );
+    QVERIFY2( devicesCategory != nullptr, "preferencesCategoryDevices" );
+    clickItemCenter( *window, devicesCategory );
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "textflow-preferences-devices" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-preferences-devices" );
+
+    QQuickItem *closeButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesCloseButton" ) );
+    QVERIFY2( closeButton != nullptr, "preferencesCloseButton" );
+    clickItemCenter( *window, closeButton );
+    QTest::qWait( 120 );
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-landing-after-preferences" );
+
+    QQuickItem *joinRoomButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+    clickItemCenter( *window, joinRoomButton );
+    QTest::qWait( 200 );
+    failIfAnyWarnings( "textflow-go-shell" );
+    clearMessages();
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-shell" );
+
+    // Open the source inspector (modal overlay) and verify text overlaps within layers.
+    {
+        QObject *shellPage = rootObject->findChild<QObject *>( QStringLiteral( "shellPage" ) );
+        QVERIFY2( shellPage != nullptr, "shellPage" );
+
+        shellPage->setProperty( "selectedSourceIndex", 0 );
+        shellPage->setProperty( "selectedSourceName", QStringLiteral( "Camera" ) );
+        shellPage->setProperty( "selectedSourceExportEnabled", false );
+        shellPage->setProperty( "sourceInspectorOpen", true );
+
+        QCoreApplication::processEvents();
+        QTest::qWait( 80 );
+
+        QQuickItem *inspectorOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorOverlay" ) );
+        QVERIFY2( inspectorOverlay != nullptr, "sourceInspectorOverlay" );
+        QTRY_VERIFY_WITH_TIMEOUT( inspectorOverlay->property( "visible" ).toBool(), 1000 );
+
+        verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-source-inspector" );
+
+        QQuickItem *inspectorClose = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorCloseButton" ) );
+        QVERIFY2( inspectorClose != nullptr, "sourceInspectorCloseButton" );
+        clickItemCenter( *window, inspectorClose );
+        QTest::qWait( 160 );
+    }
+
+    verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-shell-after-inspector" );
 }
 
 void tst_QmlUi::layout_textContrastIsReadableInKeyScreens()
@@ -1479,6 +1916,7 @@ void tst_QmlUi::layout_textContrastIsReadableInKeyScreens()
     }
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1534,6 +1972,7 @@ void tst_QmlUi::preferences_scrollbarAndWheelWork()
     engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
     engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1618,6 +2057,7 @@ void tst_QmlUi::preferences_wheelOverComboBox_doesNotChangeSelection()
     engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
     engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1646,6 +2086,28 @@ void tst_QmlUi::preferences_wheelOverComboBox_doesNotChangeSelection()
 
     QQuickItem *combo = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesAccentCombo" ) );
     QVERIFY2( combo != nullptr, "preferencesAccentCombo" );
+
+    // The preferences page is scrollable; ensure the combo is on-screen before wheeling over it.
+    {
+        const qreal contentH = flickable->property( "contentHeight" ).toReal();
+        const qreal viewH = flickable->height();
+        const qreal maxY = std::max( 0.0, contentH - viewH );
+
+        const QPointF comboCentreInFlickable = combo->mapToItem( flickable, QPointF( combo->width() / 2.0, combo->height() / 2.0 ) );
+        qreal desired = comboCentreInFlickable.y() - ( viewH / 2.0 );
+        if ( desired < 0.0 ) {
+            desired = 0.0;
+        }
+        if ( desired > maxY ) {
+            desired = maxY;
+        }
+
+        flickable->setProperty( "contentY", desired );
+        QCoreApplication::processEvents();
+        QTest::qWait( 80 );
+
+        QVERIFY2( itemCentreIsInsideWindow( *window, combo ), "preferencesAccentCombo should be on-screen" );
+    }
 
     const int beforeIndex = combo->property( "currentIndex" ).toInt();
     const qreal beforeY = flickable->property( "contentY" ).toReal();
@@ -1679,6 +2141,7 @@ void tst_QmlUi::preferences_clickInsidePanel_doesNotClose()
     engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
     engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1758,6 +2221,7 @@ void tst_QmlUi::themePresetAccents_mapToExplicitHighlightColours()
     }
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1823,6 +2287,7 @@ void tst_QmlUi::themePresetAccents_shiftInDarkMode()
         } );
 
     engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
     engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
     engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
     engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
@@ -1910,6 +2375,7 @@ void tst_QmlUi::landing_primaryButtons_haveReadableTextInVictorianAndLight()
         }
 
         engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+        engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
         engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
         engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
         engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );

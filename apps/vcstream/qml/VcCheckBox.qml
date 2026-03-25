@@ -28,7 +28,7 @@ CheckBox {
             anchors.centerIn: parent
             text: control.checked ? "✓" : ""
             color: ( theme ? theme.highlightedTextColour : palette.highlightedText )
-            font.pixelSize: 14
+            font.pixelSize: ( theme ? Math.max( 12, Math.round( theme.fontBasePx * 1.0 ) ) : 14 )
         }
     }
 

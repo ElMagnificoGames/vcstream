@@ -77,6 +77,58 @@ ToolButton {
     palette.buttonText: textRoleColour
     palette.text: textRoleColour
 
+    contentItem: Item {
+        id: contentRoot
+
+        readonly property bool showIcon: ( control.display !== AbstractButton.TextOnly )
+            && ( ( control.icon && control.icon.source && control.icon.source.toString().length > 0 )
+                || ( control.icon && control.icon.name && control.icon.name.length > 0 ) )
+
+        readonly property bool showText: ( control.display !== AbstractButton.IconOnly )
+            && control.text && control.text.length > 0
+
+        readonly property url resolvedIconSource: {
+            if ( control.icon && control.icon.source && control.icon.source.toString().length > 0 ) {
+                return control.icon.source
+            }
+            if ( control.icon && control.icon.name && control.icon.name.length > 0 ) {
+                return "image://theme/" + control.icon.name
+            }
+            return ""
+        }
+
+        implicitWidth: contentRow.implicitWidth
+        implicitHeight: contentRow.implicitHeight
+
+        Row {
+            id: contentRow
+            spacing: control.spacing
+            anchors.centerIn: parent
+
+            Image {
+                visible: contentRoot.showIcon
+                source: contentRoot.resolvedIconSource
+                width: 18
+                height: 18
+                sourceSize.width: 36
+                sourceSize.height: 36
+                fillMode: Image.PreserveAspectFit
+                opacity: control.enabled ? 1.0 : 0.55
+            }
+
+            Text {
+                visible: contentRoot.showText
+                text: control.text
+                font: control.font
+                color: control.textRoleColour
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                opacity: control.enabled ? 1.0 : 0.55
+            }
+        }
+    }
+
     background: Item {
         Rectangle {
             anchors.fill: parent

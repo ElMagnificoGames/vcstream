@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 3.24 )
 
-project( vcstream VERSION 0.4.0 LANGUAGES CXX )
+project( vcstream VERSION 0.5.0 LANGUAGES CXX )
 
 set( CMAKE_CXX_STANDARD 17 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
@@ -19,3 +19,9 @@ enable_testing()
 add_subdirectory( modules )
 add_subdirectory( apps/vcstream )
 add_subdirectory( apps/unittests )
+
+option( VCSTREAM_BUILD_INTERNAL_TOOLS "Build internal developer tools" OFF )
+
+if ( VCSTREAM_BUILD_INTERNAL_TOOLS )
+    add_subdirectory( apps/fontprobe )
+endif()

@@ -58,6 +58,7 @@ ComboBox {
     bottomPadding: 9
 
     contentItem: Text {
+        anchors.fill: parent
         leftPadding: control.leftPadding
         rightPadding: 0
         text: control.displayText
@@ -150,75 +151,84 @@ ComboBox {
             }
         }
 
-        contentItem: ListView {
-            id: popupList
-            clip: true
-            implicitHeight: Math.min( contentHeight, 280 )
-            model: control.model
-            currentIndex: control.currentIndex
+        contentItem: Item {
+            id: popupRoot
 
-            boundsBehavior: Flickable.StopAtBounds
+            implicitWidth: control.width
+            implicitHeight: popupList.implicitHeight
 
-            delegate: ItemDelegate {
-                objectName: ( control.objectName.length > 0
-                    ? control.objectName + "PopupDelegate_" + index
-                    : "vcComboPopupDelegate_" + index )
-                width: popupList.width
-                height: 38
-                hoverEnabled: true
-                highlighted: ( index === control.currentIndex )
+            ListView {
+                id: popupList
+                anchors.fill: parent
+                clip: true
+                implicitHeight: Math.min( contentHeight, 280 )
+                model: control.model
+                currentIndex: control.currentIndex
 
-                background: Rectangle {
-                    radius: ( theme ? theme.controlRadius : 8 )
-                    color: ( highlighted || hovered )
-                        ? ( theme ? theme.tertiaryAccentColour : palette.highlight )
-                        : "transparent"
+                boundsBehavior: Flickable.StopAtBounds
+
+                ScrollBar.vertical: VcScrollBar {
+                    id: popupScrollBar
+                    theme: control.theme
+                    policy: ScrollBar.AsNeeded
+                    orientation: Qt.Vertical
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
                 }
 
-                contentItem: Text {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    verticalAlignment: Text.AlignVCenter
-                    text: {
-                        if ( typeof modelData === "string" ) {
-                            return modelData
-                        }
-                        if ( typeof modelData === "number" ) {
-                            return String( modelData )
-                        }
-                        if ( modelData && typeof modelData === "object" ) {
-                            if ( control.textRole && modelData[control.textRole] !== undefined ) {
-                                return modelData[control.textRole]
-                            }
-                            if ( modelData.text !== undefined ) {
-                                return modelData.text
-                            }
-                        }
-                        if ( control.textRole && model && model[control.textRole] !== undefined ) {
-                            return model[control.textRole]
-                        }
-                        return ""
+                delegate: ItemDelegate {
+                    objectName: ( control.objectName.length > 0
+                        ? control.objectName + "PopupDelegate_" + index
+                        : "vcComboPopupDelegate_" + index )
+                    width: popupList.width - ( popupScrollBar.visible ? ( popupScrollBar.width + 6 ) : 0 )
+                    height: 38
+                    hoverEnabled: true
+                    highlighted: ( index === control.currentIndex )
+
+                    background: Rectangle {
+                        radius: ( theme ? theme.controlRadius : 8 )
+                        color: ( highlighted || hovered )
+                            ? ( theme ? theme.tertiaryAccentColour : palette.highlight )
+                            : "transparent"
                     }
-                    color: ( theme ? theme.textColour : palette.text )
-                    elide: Text.ElideRight
-                }
 
-                onClicked: {
-                    control.currentIndex = index
-                    control.activated( index )
-                    control.popup.close()
+                    contentItem: Text {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: Text.AlignVCenter
+                        text: {
+                            if ( typeof modelData === "string" ) {
+                                return modelData
+                            }
+                            if ( typeof modelData === "number" ) {
+                                return String( modelData )
+                            }
+                            if ( modelData && typeof modelData === "object" ) {
+                                if ( control.textRole && modelData[control.textRole] !== undefined ) {
+                                    return modelData[control.textRole]
+                                }
+                                if ( modelData.text !== undefined ) {
+                                    return modelData.text
+                                }
+                            }
+                            if ( control.textRole && model && model[control.textRole] !== undefined ) {
+                                return model[control.textRole]
+                            }
+                            return ""
+                        }
+                        color: ( theme ? theme.textColour : palette.text )
+                        elide: Text.ElideRight
+                    }
+
+                    onClicked: {
+                        control.currentIndex = index
+                        control.activated( index )
+                        control.popup.close()
+                    }
                 }
             }
-        }
-
-        VcFlickScrollBar {
-            theme: control.theme
-            flickable: popupList
-            anchors.right: popupList.right
-            anchors.top: popupList.top
-            anchors.bottom: popupList.bottom
-            anchors.margins: 6
         }
     }
 

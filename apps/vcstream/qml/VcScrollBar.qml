@@ -11,6 +11,10 @@ ScrollBar {
     width: implicitWidth
     minimumSize: 0.12
 
+    // Prevent the thumb from painting outside the track during the first
+    // layout tick (some popups briefly report zero height).
+    clip: true
+
     // Some desktop styles add internal padding that can collapse the available
     // track size for narrow bars (e.g. availableWidth becomes 0). We want the
     // thumb to remain visible and use the full allocated geometry.
@@ -21,8 +25,14 @@ ScrollBar {
 
     // Render whenever the content is scrollable.
     // This avoids style/plugin differences that can hide scroll bars entirely.
-    readonly property bool vcCanScroll: ( control.size < 0.999 )
-    visible: ( control.policy !== ScrollBar.AlwaysOff ) && vcCanScroll
+    readonly property real vcSaneSize: ( isFinite( control.size ) && control.size > 0.0 ) ? control.size : 0.0
+    readonly property real vcEffectiveSize: Math.max( control.minimumSize, vcSaneSize )
+
+    readonly property bool vcCanScroll: ( vcSaneSize < 0.999 )
+
+    // Avoid a 1-frame "dot" when geometry is not yet settled.
+    readonly property bool vcGeometryReady: ( control.width >= 8 ) && ( control.height >= 60 )
+    visible: vcGeometryReady && ( control.policy !== ScrollBar.AlwaysOff ) && vcCanScroll
     opacity: 1.0
 
     background: Rectangle {
@@ -45,12 +55,12 @@ ScrollBar {
         readonly property real trackH: control.height
 
         width: ( control.orientation === Qt.Horizontal )
-            ? Math.max( 6, trackW * control.size )
+            ? Math.max( 6, trackW * vcEffectiveSize )
             : trackW
 
         height: ( control.orientation === Qt.Horizontal )
             ? trackH
-            : Math.max( 6, trackH * control.size )
+            : Math.max( 6, trackH * vcEffectiveSize )
 
         x: ( control.orientation === Qt.Horizontal )
             ? Math.max( 0, Math.min( trackW - width, trackW * control.position ) )

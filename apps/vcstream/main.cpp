@@ -4,15 +4,20 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
+#include <QQmlEngine>
 #include <QString>
 #include <QUrl>
 #include <QWindow>
+
+#include <QtGlobal>
 
 #include "modules/app/defence/crashguard.h"
 #include "modules/app/lifecycle/appsupervisor.h"
 #include "modules/ui/colour/oklchutil.h"
 #include "modules/ui/placement/windowplacement.h"
 #include "modules/ui/theme/accentimageprovider.h"
+#include "modules/ui/theme/themeiconimageprovider.h"
+#include "modules/ui/fonts/fontpreviewsafetycache.h"
 
 int main( int argc, char **argv )
 {
@@ -45,6 +50,9 @@ int main( int argc, char **argv )
         OklchUtil oklchUtil;
         QQmlApplicationEngine engine;
 
+        qmlRegisterUncreatableType<FontPreviewSafetyCache>( "VcStream", 1, 0, "FontPreviewSafety",
+            QStringLiteral( "FontPreviewSafety is exposed via AppSupervisor.fontPreviewSafetyCache." ) );
+
         QObject::connect( &app, &QCoreApplication::aboutToQuit, &appSupervisor, &AppSupervisor::shutdown );
 
         QObject::connect( &engine, &QQmlApplicationEngine::warnings, &engine, []( const QList<QQmlError> &warnings ) {
@@ -54,6 +62,7 @@ int main( int argc, char **argv )
         } );
 
         engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+        engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
         engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
         engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &appSupervisor );
 
