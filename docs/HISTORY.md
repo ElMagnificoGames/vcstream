@@ -669,6 +669,36 @@ Cleanup
 - ADR location:
   - `docs/adr/0001-transport-and-protocol.md`
 
+## Task 2.2 — Write an initial trust-model ADR
+
+### What
+
+- Added a trust-model ADR that defines how clients trust a relay host without a public certificate authority.
+
+### Why
+
+- Encrypted transport alone is not enough: the application must decide what it means to trust a host and how to detect an unexpected host identity.
+- This decision affects the user experience (first connect prompts), the persistence model (pinned identities and allowlists), and how we represent “identity” in the UI.
+
+### Acceptance criteria
+
+- ADR written.
+- Trust model is explicit.
+- Likely user-facing consequences are recorded.
+
+### Decisions
+
+- Host trust: TOFU with an explicit first-time out-of-band host identity confirmation, then pin the host identity for later connects.
+- Access control: host approval required for unknown joiners; host can allow once or add the joiner identity to a per-host allowlist.
+- Optional room password: required every time, never persisted, and checked after host approval.
+- Identity representation: identity codes are derived from long-term public key fingerprints (not from IP address or user-provided strings).
+- Storage: device private key, pinned host identities, and allowlists are stored in the app data directory with restricted permissions; the private key file is additionally obfuscated to avoid obvious plaintext key material at rest.
+
+### Technical notes
+
+- ADR location:
+  - `docs/adr/0002-trust-model.md`
+
 ## Maintenance — Fix `-Wconversion` build breaks; ensure accent changes repaint ComboBox indicator
 
 ### What
