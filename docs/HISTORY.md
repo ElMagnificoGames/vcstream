@@ -639,3 +639,44 @@ Cleanup
   - `apps/vcstream/main.cpp`
   - `apps/unittests/qml/tst_qml_ui.cpp`
   - `apps/fontprobe/main.cpp`
+
+## Maintenance — Fix `-Wconversion` build breaks; ensure accent changes repaint ComboBox indicator
+
+### What
+
+- Fixed several build failures revealed by enabling `-Wconversion -Werror` across the repository.
+  - `oklchcolour::toSrgbFitted()` now passes explicit `float` channel values to `QColor::fromRgbF()`.
+  - Font preview reference rendering now uses `qsizetype` for glyph vector iteration to avoid narrowing conversions.
+  - QML UI test brace counting now uses `qsizetype` to match `QString::count()`.
+- Fixed a Windows-visible UI bug where the dropdown "V" indicator on `VcComboBox` could keep the previous accent colour (notably Victorian oxblood) after changing the accent.
+  - The indicator is a `Canvas`, which does not repaint automatically when its inputs change.
+  - Added an explicit repaint trigger when the effective stroke colour changes.
+- Added a QML smoke test that changes the accent and asserts the ComboBox indicator repaints (using a `paintSerial` counter on the Canvas).
+
+### Why
+
+- With strict conversion warnings enabled, previously-benign narrowing/sign conversions now fail the build; these need to be corrected rather than weakening the warning policy.
+- Accent switching should visually propagate to all themed elements immediately; stale Victorian colour accents are confusing and undermine the theme system.
+
+### Acceptance criteria
+
+- The project builds cleanly under `-Wconversion -Werror`.
+- Changing the accent updates the `VcComboBox` indicator colour without needing a resize or other incidental repaint.
+- QML UI smoke tests include coverage for this repaint behaviour and emit no warnings.
+
+### Decisions
+
+- Treat the ComboBox indicator repaint as an explicit responsibility of `VcComboBox` (request paint on colour change) rather than relying on incidental `paletteChanged` or theme object replacement.
+- Use a simple `paintSerial` property on the indicator `Canvas` to make repaint behaviour testable and deterministic.
+
+### Technical notes
+
+- Version bump for this maintenance change:
+  - `CMakeLists.txt`
+- ComboBox indicator repaint fix:
+  - `apps/vcstream/qml/VcComboBox.qml`
+- Repaint regression test:
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+- `-Wconversion` build fixes:
+  - `modules/ui/colour/oklchcolour.cpp`
+  - `modules/ui/fonts/fontpreviewsafetycheckerdefault.cpp`

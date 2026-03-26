@@ -6,6 +6,8 @@ ComboBox {
 
     property var theme
 
+    readonly property color indicatorStrokeColour: ( theme ? theme.primaryAccentColour : palette.highlight )
+
     // Avoid accidental value changes while the user is trying to scroll.
     // Wheel scrolling should be handled by the surrounding scroll view.
     wheelEnabled: false
@@ -69,16 +71,24 @@ ComboBox {
     }
 
     indicator: Canvas {
+        objectName: ( control.objectName && control.objectName.length > 0 )
+            ? ( control.objectName + "Indicator" )
+            : "vcComboBoxIndicator"
+
         x: control.width - width - 12
         y: Math.round( ( control.height - height ) / 2 )
         width: 12
         height: 8
         contextType: "2d"
 
+        property int paintSerial: 0
+
         onPaint: {
             if ( !context ) {
                 return
             }
+
+            paintSerial += 1
 
             context.setTransform( 1, 0, 0, 1, 0, 0 )
             context.clearRect( 0, 0, width, height )
@@ -91,9 +101,13 @@ ComboBox {
             context.lineWidth = 2
             context.lineJoin = "round"
             context.lineCap = "round"
-            context.strokeStyle = ( theme ? theme.primaryAccentColour : palette.highlight )
+            context.strokeStyle = control.indicatorStrokeColour
             context.stroke()
         }
+    }
+
+    onIndicatorStrokeColourChanged: {
+        indicator.requestPaint()
     }
 
     onThemeChanged: {

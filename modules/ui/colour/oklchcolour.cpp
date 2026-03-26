@@ -197,7 +197,11 @@ QColor toSrgbFitted( const Oklch &oklch )
     const double g = srgbEncode( linear.g );
     const double bl = srgbEncode( linear.b );
 
-    return QColor::fromRgbF( clamp01( r ), clamp01( g ), clamp01( bl ), 1.0 );
+    return QColor::fromRgbF(
+        static_cast<float>( clamp01( r ) ),
+        static_cast<float>( clamp01( g ) ),
+        static_cast<float>( clamp01( bl ) ),
+        1.0f );
 }
 
 Oklch fromSrgb( const QColor &srgb )

@@ -148,8 +148,8 @@ static QImage renderReferenceMask( const QString &text, const QFont &font, const
     int outlineGlyphs = 0;
     int alphaGlyphs = 0;
 
-    const int n = glyphs.size();
-    for ( int i = 0; i < n; ++i ) {
+    const qsizetype n = glyphs.size();
+    for ( qsizetype i = 0; i < n; ++i ) {
         const quint32 g = glyphs.at( i );
         bool drew = false;
 

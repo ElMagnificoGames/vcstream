@@ -1319,7 +1319,102 @@ private Q_SLOTS:
     void themePresetAccents_mapToExplicitHighlightColours();
     void themePresetAccents_shiftInDarkMode();
     void landing_primaryButtons_haveReadableTextInVictorianAndLight();
+    void preferences_accentChange_repaintsComboIndicator();
 };
+
+void tst_QmlUi::preferences_accentChange_repaintsComboIndicator()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "themeMode", QStringLiteral( "light" ) );
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "victorian" ) );
+    }
+
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupOpenPreferences" ), true );
+    engine.rootContext()->setContextProperty( QStringLiteral( "vcstreamStartupPreferencesCategoryIndex" ), 0 );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 60 );
+    failIfAnyWarnings( "accent-indicator-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *overlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesOverlay" ) );
+    QVERIFY2( overlay != nullptr, "preferencesOverlay" );
+    QTRY_VERIFY_WITH_TIMEOUT( overlay->isVisible(), 1000 );
+
+    QQuickItem *combo = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesAccentCombo" ) );
+    QVERIFY2( combo != nullptr, "preferencesAccentCombo" );
+
+    // The preferences page is scrollable; ensure the combo is on-screen before we expect repaints.
+    {
+        QQuickItem *scrollView = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesGeneralScrollView" ) );
+        QVERIFY2( scrollView != nullptr, "preferencesGeneralScrollView" );
+
+        QObject *flickableObj = scrollView->property( "contentItem" ).value<QObject *>();
+        QQuickItem *flickable = qobject_cast<QQuickItem *>( flickableObj );
+        QVERIFY2( flickable != nullptr, "preferencesGeneralScrollView flickable" );
+
+        const qreal contentH = flickable->property( "contentHeight" ).toReal();
+        const qreal viewH = flickable->height();
+        const qreal maxY = std::max( 0.0, contentH - viewH );
+
+        const QPointF comboCentreInFlickable = combo->mapToItem( flickable, QPointF( combo->width() / 2.0, combo->height() / 2.0 ) );
+        qreal desired = comboCentreInFlickable.y() - ( viewH / 2.0 );
+        if ( desired < 0.0 ) {
+            desired = 0.0;
+        }
+        if ( desired > maxY ) {
+            desired = maxY;
+        }
+
+        flickable->setProperty( "contentY", desired );
+        QCoreApplication::processEvents();
+        QTest::qWait( 80 );
+    }
+
+    QVERIFY2( itemCentreIsInsideWindow( *window, combo ), "preferencesAccentCombo should be on-screen" );
+
+    QQuickItem *indicator = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesAccentComboIndicator" ) );
+    QVERIFY2( indicator != nullptr, "preferencesAccentComboIndicator" );
+
+    QTRY_VERIFY_WITH_TIMEOUT( indicator->property( "paintSerial" ).toInt() > 0, 1000 );
+    const int before = indicator->property( "paintSerial" ).toInt();
+
+    if ( supervisor.preferences() != nullptr ) {
+        supervisor.preferences()->setProperty( "accent", QStringLiteral( "blue" ) );
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT( indicator->property( "paintSerial" ).toInt() > before, 1000 );
+    failIfAnyWarnings( "accent-indicator-repaint" );
+    clearMessages();
+}
 
 void tst_QmlUi::initTestCase()
 {
@@ -1680,7 +1775,7 @@ void tst_QmlUi::style_displayFontIsNotUsedAtSmallSizes()
         const QStringList lines = text.split( QLatin1Char( '\n' ) );
 
         bool inLabel;
-        int braceDepth;
+        qsizetype braceDepth;
         bool sawHeadingFamily;
         bool sawSmallFont;
 
