@@ -640,6 +640,35 @@ Cleanup
   - `apps/unittests/qml/tst_qml_ui.cpp`
   - `apps/fontprobe/main.cpp`
 
+## Task 2.1 — Write a transport and protocol ADR
+
+### What
+
+- Added a first architecture decision record (ADR) describing the transport and protocol direction for VCStream.
+
+### Why
+
+- The transport choice constrains the protocol envelope, media multiplexing, encryption assumptions, and whether NAT traversal/hole punching remains viable without a later rewrite.
+- Writing this down early reduces accidental drift into TCP-only assumptions.
+
+### Acceptance criteria
+
+- An ADR exists that makes the transport direction explicit.
+- The ADR records alternatives considered and key consequences/risks.
+- The ADR explicitly calls out follow-up decisions that are intentionally deferred (trust UX, rendezvous scope details, control reliability details).
+
+### Decisions
+
+- Transport family: UDP secured with DTLS for both control and media.
+- Control serialisation: CBOR.
+- Message framing: one UDP datagram carries exactly one CBOR message.
+- Control channel direction: add a small reliability layer (message ids + acks + retries) for control messages that must arrive.
+
+### Technical notes
+
+- ADR location:
+  - `docs/adr/0001-transport-and-protocol.md`
+
 ## Maintenance — Fix `-Wconversion` build breaks; ensure accent changes repaint ComboBox indicator
 
 ### What
