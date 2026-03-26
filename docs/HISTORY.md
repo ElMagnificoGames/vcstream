@@ -548,3 +548,52 @@ Cleanup
 - Style gate test:
   - `apps/unittests/style/tst_style.cpp`
   - `apps/unittests/style/CMakeLists.txt`
+
+## Task 1.5 — Add landing-page popups (Scheduling + Support)
+
+### What
+
+- Added two optional landing-page actions: a scheduling popup and a support popup.
+- Implemented each popup as its own modal overlay with outside-click dismissal, an explicit close button, and no layout participation in the underlying page.
+- Wired the scheduling popup to open the external schedule coordination tool in the platform-default browser.
+- Fixed the scheduling popup's internal layout sizing so its contents are measured and rendered correctly.
+- Reworked the support popup from placeholder copy into a fuller, scrollable support page that explains why channel growth matters, ranks useful free support actions from most important to less important, and ends with a quieter note about gifting subscriptions.
+- Expanded QML layout/smoke test coverage so modal overlays are exercised and the overlap checks treat overlays as separate interaction layers.
+- Made the Scheduling/Support/Preferences action cluster consistent across the landing screen and the in-room shell, and hosted the popups at the app root so either page can open them.
+- Adjusted typography so modal titles use the body face, and the shell masthead uses the display face at a larger size.
+
+### Why
+
+- The roadmap called for two small optional landing actions that stay out of the main start flow while still being easy to discover.
+- Scheduling help is useful before a user has committed to joining or hosting a room, so it belongs on the landing screen rather than in deeper settings.
+- The support popup needed to do more than advertise links: it needed to explain why supporting the channel matters in plain language, avoid streamer jargon, and make free support feel concrete and worthwhile.
+- The support copy is longer than a compact tooltip-style popup, so the UI needed a scrollable body and stronger typographic hierarchy to keep it readable on smaller windows.
+
+### Acceptance criteria
+
+- The landing screen now exposes two separate optional buttons: scheduling and support.
+- Each button opens its own overlay popup without causing landing-page layout reflow or hover oscillation.
+- External links are opened via the platform-default browser.
+- The optional actions are available from both the landing screen and the in-room shell.
+- QML UI smoke tests explicitly exercise opening and closing both popups and continue to fail on any warnings.
+
+### Decisions
+
+- Kept the new actions in the landing page's existing top-right utility area, alongside Preferences, so they remain clearly optional and visually secondary to the main Join/Host actions.
+- Marked the landing popup-launch buttons and browser-launch buttons with `testSkipActivate: true` so the automatic interaction sweep can still hover them without opening overlays or external browsers opportunistically in CI.
+- Used a compact scheduling popup with one clear external action, but made the support popup scrollable because the copy needs room for ranked items and explanatory text.
+- Kept the support content structured for skimming (short intro, ranked free-support items, and an optional paid-support note) while staying within a single landing-only popup.
+
+### Technical notes
+
+- Landing-page popup implementation and copy:
+  - `apps/vcstream/qml/LandingPage.qml`
+- Reusable action cluster + shared overlays:
+  - `apps/vcstream/qml/VcUtilityActions.qml`
+  - `apps/vcstream/qml/SchedulingOverlay.qml`
+  - `apps/vcstream/qml/SupportOverlay.qml`
+  - `apps/vcstream/qml/main.qml`
+- QML warning-gate and popup interaction coverage:
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+- Version bump for this feature task:
+  - `CMakeLists.txt`

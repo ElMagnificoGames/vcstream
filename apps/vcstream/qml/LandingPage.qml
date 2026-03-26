@@ -48,37 +48,28 @@ Page {
     signal joinRequested()
     signal hostRequested()
     signal preferencesRequested()
+    signal schedulingRequested()
+    signal supportRequested()
     signal hoverHelpRequested( Item target, string text )
     signal hoverHelpHideRequested()
 
-    VcToolButton {
-        id: preferencesButton
-        objectName: "landingPreferencesButton"
-        theme: root.theme
-        tone: "neutral"
-
-        hoverEnabled: true
-
+    VcUtilityActions {
+        id: landingTopActions
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: ( theme ? theme.spaceTight : 10 )
         z: 1000
 
-        text: "Preferences"
-        icon.name: "preferences-system"
-        display: ( appSupervisor && appSupervisor.themeIconAvailable( icon.name ) ? AbstractButton.IconOnly : AbstractButton.TextOnly )
+        theme: root.theme
+        schedulingObjectName: "landingSchedulingButton"
+        supportObjectName: "landingSupportButton"
+        preferencesObjectName: "landingPreferencesButton"
 
-        onHoveredChanged: {
-            if ( hovered ) {
-                root.hoverHelpRequested( preferencesButton, "Open preferences." )
-            } else {
-                root.hoverHelpHideRequested()
-            }
-        }
-
-        onClicked: {
-            root.preferencesRequested()
-        }
+        onSchedulingRequested: root.schedulingRequested()
+        onSupportRequested: root.supportRequested()
+        onPreferencesRequested: root.preferencesRequested()
+        onHoverHelpRequested: function( target, text ) { root.hoverHelpRequested( target, text ) }
+        onHoverHelpHideRequested: root.hoverHelpHideRequested()
     }
 
     VcPanel {
@@ -155,4 +146,5 @@ Page {
             }
         }
     }
+
 }

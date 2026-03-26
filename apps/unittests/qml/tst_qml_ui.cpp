@@ -633,6 +633,46 @@ void verifyScrollBarsAreNotDegenerate( QQuickWindow &window, QQuickItem *rootIte
     }
 }
 
+static void verifyUtilityActionsOrderAndPlacement(
+    QQuickWindow &window,
+    QQuickItem *rootItem,
+    const QString &schedulingObjectName,
+    const QString &supportObjectName,
+    const QString &preferencesObjectName,
+    const char *step )
+{
+    QQuickItem *schedulingButton;
+    QQuickItem *supportButton;
+    QQuickItem *preferencesButton;
+
+    schedulingButton = findItemByObjectNameRecursive( rootItem, schedulingObjectName );
+    supportButton = findItemByObjectNameRecursive( rootItem, supportObjectName );
+    preferencesButton = findItemByObjectNameRecursive( rootItem, preferencesObjectName );
+
+    QVERIFY2( schedulingButton != nullptr, qPrintable( schedulingObjectName ) );
+    QVERIFY2( supportButton != nullptr, qPrintable( supportObjectName ) );
+    QVERIFY2( preferencesButton != nullptr, qPrintable( preferencesObjectName ) );
+
+    const QRectF rs = sceneRect( schedulingButton );
+    const QRectF rSup = sceneRect( supportButton );
+    const QRectF rp = sceneRect( preferencesButton );
+    QVERIFY2( rs.isValid(), "scheduling rect" );
+    QVERIFY2( rSup.isValid(), "support rect" );
+    QVERIFY2( rp.isValid(), "preferences rect" );
+
+    // Left-to-right ordering: Scheduling, Support, Preferences.
+    QVERIFY2( rs.center().x() < rSup.center().x(), step );
+    QVERIFY2( rSup.center().x() < rp.center().x(), step );
+
+    // Rough top-right placement.
+    QVERIFY2( rp.right() > ( window.width() - 80 ), step );
+    QVERIFY2( rp.top() < 90.0, step );
+
+    // Keep on the same row.
+    QVERIFY2( qAbs( rs.center().y() - rp.center().y() ) < 24.0, step );
+    QVERIFY2( qAbs( rSup.center().y() - rp.center().y() ) < 24.0, step );
+}
+
 void verifyNoDirectDefaultControls( QQuickItem *rootItem, const char *step )
 {
     QVector<QQuickItem *> all;
@@ -928,13 +968,69 @@ void verifyNoInteractiveOverlaps( QQuickWindow &window, QQuickItem *rootItem, co
 {
     const QVector<QQuickItem *> items = discoverInteractiveProjectItems( rootItem );
 
+    auto nearestAncestorWithObjectNameSubstring = []( QQuickItem *item, const QString &needle ) {
+        QQuickItem *cur;
+
+        cur = item;
+        while ( cur != nullptr ) {
+            if ( cur->objectName().contains( needle, Qt::CaseSensitive ) ) {
+                return cur;
+            }
+            cur = cur->parentItem();
+        }
+
+        return static_cast<QQuickItem *>( nullptr );
+    };
+
+    auto nearestAncestorWithClassPrefix = []( QQuickItem *item, const QString &prefix ) {
+        QQuickItem *cur;
+
+        cur = item;
+        while ( cur != nullptr ) {
+            const QString className = QString::fromLatin1( cur->metaObject()->className() );
+            if ( className.startsWith( prefix, Qt::CaseSensitive ) ) {
+                return cur;
+            }
+            cur = cur->parentItem();
+        }
+
+        return static_cast<QQuickItem *>( nullptr );
+    };
+
+    auto interactiveOverlapLayerKey = [&nearestAncestorWithObjectNameSubstring, &nearestAncestorWithClassPrefix]( QQuickItem *item ) {
+        if ( item == nullptr ) {
+            return QStringLiteral( "main" );
+        }
+
+        QQuickItem *popupItem = nearestAncestorWithClassPrefix( item, QStringLiteral( "QQuickPopupItem" ) );
+        if ( popupItem != nullptr ) {
+            return QStringLiteral( "popup:%1" ).arg( QString::number( reinterpret_cast<quintptr>( popupItem ) ) );
+        }
+
+        QQuickItem *overlay = nearestAncestorWithObjectNameSubstring( item, QStringLiteral( "Overlay" ) );
+        if ( overlay != nullptr ) {
+            const QString name = overlay->objectName();
+            if ( !name.isEmpty() ) {
+                return QStringLiteral( "overlay:%1" ).arg( name );
+            }
+        }
+
+        return QStringLiteral( "main" );
+    };
+
     for ( int i = 0; i < items.size(); ++i ) {
         QQuickItem *a = items[i];
         const QRectF ra = sceneRect( a );
+        const QString layerA = interactiveOverlapLayerKey( a );
         for ( int j = i + 1; j < items.size(); ++j ) {
             QQuickItem *b = items[j];
 
             if ( a == b ) {
+                continue;
+            }
+
+            const QString layerB = interactiveOverlapLayerKey( b );
+            if ( layerA != layerB ) {
                 continue;
             }
 
@@ -946,13 +1042,11 @@ void verifyNoInteractiveOverlaps( QQuickWindow &window, QQuickItem *rootItem, co
 
             const QString keyA = stableKeyForItem( a );
             const QString keyB = stableKeyForItem( b );
-            if ( keyA.contains( QStringLiteral( "Overlay" ) ) || keyB.contains( QStringLiteral( "Overlay" ) ) ) {
-                continue;
-            }
 
             const QString message =
-                QStringLiteral( "Overlapping interactive items at %1: A=%2 B=%3 window=%4x%5" )
+                QStringLiteral( "Overlapping interactive items at %1 layer=%2: A=%3 B=%4 window=%5x%6" )
                     .arg( QString::fromLatin1( step ) )
+                    .arg( layerA )
                     .arg( keyA )
                     .arg( keyB )
                     .arg( window.width() )
@@ -1203,6 +1297,7 @@ private Q_SLOTS:
     void themePreferences_propagatePaletteRolesToPages();
     void style_projectDoesNotUseDefaultControlsDirectly();
     void style_projectDoesNotUseUnsupportedCanvasApis();
+    void style_displayFontIsNotUsedAtSmallSizes();
     void layout_noOverlapsInKeyScreens();
     void appearancePreferences_extremes_noLayoutGlitches();
     void text_noOverlapsInKeyFlows_ignoringOverlays();
@@ -1210,6 +1305,8 @@ private Q_SLOTS:
     void preferences_scrollbarAndWheelWork();
     void preferences_wheelOverComboBox_doesNotChangeSelection();
     void preferences_clickInsidePanel_doesNotClose();
+    void landing_popups_openAndCloseWithoutWarnings();
+    void app_utilityActions_areConsistentAcrossPages();
     void themePresetAccents_mapToExplicitHighlightColours();
     void themePresetAccents_shiftInDarkMode();
     void landing_primaryButtons_haveReadableTextInVictorianAndLight();
@@ -1555,6 +1652,73 @@ void tst_QmlUi::style_projectDoesNotUseUnsupportedCanvasApis()
     }
 }
 
+void tst_QmlUi::style_displayFontIsNotUsedAtSmallSizes()
+{
+    // Libre Caslon Display is a display cut. It is intended for large sizes.
+    // Guard against using the display font family alongside small UI heading sizes.
+    const QStringList patterns = QStringList{ QStringLiteral( "*.qml" ) };
+    QDirIterator it( QStringLiteral( ":/qml" ), patterns, QDir::Files, QDirIterator::Subdirectories );
+
+    QVERIFY2( it.hasNext(), "Expected QML resources under :/qml" );
+
+    while ( it.hasNext() ) {
+        const QString path = it.next();
+        QFile f( path );
+        QVERIFY2( f.open( QIODevice::ReadOnly ), qPrintable( path ) );
+
+        const QString text = QString::fromUtf8( f.readAll() );
+
+        const QStringList lines = text.split( QLatin1Char( '\n' ) );
+
+        bool inLabel;
+        int braceDepth;
+        bool sawHeadingFamily;
+        bool sawSmallFont;
+
+        inLabel = false;
+        braceDepth = 0;
+        sawHeadingFamily = false;
+        sawSmallFont = false;
+
+        for ( int i = 0; i < lines.size(); ++i ) {
+            const QString line = lines[i];
+
+            if ( !inLabel && line.contains( QStringLiteral( "Label" ) ) && line.contains( QLatin1Char( '{' ) ) ) {
+                inLabel = true;
+                braceDepth = 0;
+                sawHeadingFamily = false;
+                sawSmallFont = false;
+            }
+
+            if ( inLabel ) {
+                braceDepth += line.count( QLatin1Char( '{' ) );
+                braceDepth -= line.count( QLatin1Char( '}' ) );
+
+                if ( line.contains( QStringLiteral( "headingFontFamily" ) ) ) {
+                    sawHeadingFamily = true;
+                }
+
+                // Consider these "small" for a display face.
+                if ( line.contains( QStringLiteral( "fontHeadingPx" ) )
+                    || line.contains( QStringLiteral( "fontBasePx" ) )
+                    || line.contains( QStringLiteral( "fontSmallPx" ) ) ) {
+                    sawSmallFont = true;
+                }
+
+                if ( braceDepth <= 0 ) {
+                    if ( sawHeadingFamily && sawSmallFont ) {
+                        const QString message =
+                            QStringLiteral( "Display font used with small size in %1" ).arg( path );
+                        QFAIL( qPrintable( message ) );
+                    }
+
+                    inLabel = false;
+                }
+            }
+        }
+    }
+}
+
 void tst_QmlUi::layout_noOverlapsInKeyScreens()
 {
     AppSupervisor supervisor;
@@ -1697,6 +1861,45 @@ void tst_QmlUi::appearancePreferences_extremes_noLayoutGlitches()
     verifyNoVisibleTextOverlaps( rootItem, "appearance-landing" );
     verifyNoInteractiveOverlaps( *window, rootItem, "appearance-landing" );
     verifyInteractiveItemsContainedWithinParents( *window, rootItem, "appearance-landing" );
+
+    {
+        QQuickItem *schedulingButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingSchedulingButton" ) );
+        QQuickItem *schedulingOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "schedulingOverlay" ) );
+        QVERIFY2( schedulingButton != nullptr, "landingSchedulingButton" );
+        QVERIFY2( schedulingOverlay != nullptr, "schedulingOverlay" );
+
+        clickItemCenter( *window, schedulingButton );
+        QTRY_VERIFY_WITH_TIMEOUT( schedulingOverlay->isVisible(), 1000 );
+        failIfAnyWarnings( "appearance-open-scheduling" );
+        clearMessages();
+
+        verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "appearance-scheduling" );
+        verifyNoInteractiveOverlaps( *window, rootItem, "appearance-scheduling" );
+        verifyInteractiveItemsContainedWithinParents( *window, rootItem, "appearance-scheduling" );
+
+        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, QPoint( 2, 2 ) );
+        QTRY_VERIFY_WITH_TIMEOUT( !schedulingOverlay->isVisible(), 1000 );
+    }
+
+    {
+        QQuickItem *supportButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingSupportButton" ) );
+        QQuickItem *supportOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "supportOverlay" ) );
+        QVERIFY2( supportButton != nullptr, "landingSupportButton" );
+        QVERIFY2( supportOverlay != nullptr, "supportOverlay" );
+
+        clickItemCenter( *window, supportButton );
+        QTRY_VERIFY_WITH_TIMEOUT( supportOverlay->isVisible(), 1000 );
+        failIfAnyWarnings( "appearance-open-support" );
+        clearMessages();
+
+        verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "appearance-support" );
+        verifyNoInteractiveOverlaps( *window, rootItem, "appearance-support" );
+        verifyInteractiveItemsContainedWithinParents( *window, rootItem, "appearance-support" );
+        verifyScrollBarsAreNotDegenerate( *window, rootItem, "appearance-support" );
+
+        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, QPoint( 2, 2 ) );
+        QTRY_VERIFY_WITH_TIMEOUT( !supportOverlay->isVisible(), 1000 );
+    }
 
     QQuickItem *preferencesButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingPreferencesButton" ) );
     QVERIFY2( preferencesButton != nullptr, "landingPreferencesButton" );
@@ -2194,6 +2397,167 @@ void tst_QmlUi::preferences_clickInsidePanel_doesNotClose()
 
     failIfAnyWarnings( "prefs-click" );
     clearMessages();
+}
+
+void tst_QmlUi::landing_popups_openAndCloseWithoutWarnings()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "landing-popups-open" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *schedulingButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingSchedulingButton" ) );
+    QQuickItem *supportButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "landingSupportButton" ) );
+    QQuickItem *schedulingOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "schedulingOverlay" ) );
+    QQuickItem *supportOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "supportOverlay" ) );
+    QQuickItem *schedulingPanel = findItemByObjectNameRecursive( rootItem, QStringLiteral( "schedulingPanel" ) );
+    QQuickItem *supportPanel = findItemByObjectNameRecursive( rootItem, QStringLiteral( "supportPanel" ) );
+    QQuickItem *schedulingOpenButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "schedulingOpenButton" ) );
+    QQuickItem *supportTwitchButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "supportTwitchButton" ) );
+    QQuickItem *supportSocialsButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "supportSocialsButton" ) );
+
+    QVERIFY2( schedulingButton != nullptr, "landingSchedulingButton" );
+    QVERIFY2( supportButton != nullptr, "landingSupportButton" );
+    QVERIFY2( schedulingOverlay != nullptr, "schedulingOverlay" );
+    QVERIFY2( supportOverlay != nullptr, "supportOverlay" );
+    QVERIFY2( schedulingPanel != nullptr, "schedulingPanel" );
+    QVERIFY2( supportPanel != nullptr, "supportPanel" );
+    QVERIFY2( schedulingOpenButton != nullptr, "schedulingOpenButton" );
+    QVERIFY2( supportTwitchButton != nullptr, "supportTwitchButton" );
+    QVERIFY2( supportSocialsButton != nullptr, "supportSocialsButton" );
+
+    QVERIFY( !schedulingOverlay->isVisible() );
+    QVERIFY( !supportOverlay->isVisible() );
+    QVERIFY( !shouldAttemptActivate( schedulingButton ) );
+    QVERIFY( !shouldAttemptActivate( supportButton ) );
+    QVERIFY( !shouldAttemptActivate( schedulingOpenButton ) );
+    QVERIFY( !shouldAttemptActivate( supportTwitchButton ) );
+    QVERIFY( !shouldAttemptActivate( supportSocialsButton ) );
+
+    clickItemCenter( *window, schedulingButton );
+    QTRY_VERIFY_WITH_TIMEOUT( schedulingOverlay->isVisible(), 1000 );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "landing-scheduling-open" );
+    clearMessages();
+
+    {
+        const QRectF r = sceneRect( schedulingPanel );
+        const QPoint p = r.center().toPoint();
+        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, p );
+        QTest::qWait( 60 );
+        QVERIFY2( schedulingOverlay->isVisible(), "scheduling overlay should remain open after inside click" );
+    }
+
+    QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, QPoint( 2, 2 ) );
+    QTRY_VERIFY_WITH_TIMEOUT( !schedulingOverlay->isVisible(), 1000 );
+    failIfAnyWarnings( "landing-scheduling-close" );
+    clearMessages();
+
+    clickItemCenter( *window, supportButton );
+    QTRY_VERIFY_WITH_TIMEOUT( supportOverlay->isVisible(), 1000 );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "landing-support-open" );
+    clearMessages();
+
+    {
+        const QRectF r = sceneRect( supportPanel );
+        const QPoint p = r.center().toPoint();
+        QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, p );
+        QTest::qWait( 60 );
+        QVERIFY2( supportOverlay->isVisible(), "support overlay should remain open after inside click" );
+    }
+
+    QTest::mouseClick( window, Qt::LeftButton, Qt::NoModifier, QPoint( 2, 2 ) );
+    QTRY_VERIFY_WITH_TIMEOUT( !supportOverlay->isVisible(), 1000 );
+    failIfAnyWarnings( "landing-support-close" );
+    clearMessages();
+}
+
+void tst_QmlUi::app_utilityActions_areConsistentAcrossPages()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+    QTest::qWait( 80 );
+    failIfAnyWarnings( "utility-actions-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    verifyUtilityActionsOrderAndPlacement(
+        *window,
+        rootItem,
+        QStringLiteral( "landingSchedulingButton" ),
+        QStringLiteral( "landingSupportButton" ),
+        QStringLiteral( "landingPreferencesButton" ),
+        "utility-actions-landing" );
+
+    QQuickItem *joinRoomButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+    clickItemCenter( *window, joinRoomButton );
+    QTest::qWait( 160 );
+    failIfAnyWarnings( "utility-actions-go-shell" );
+    clearMessages();
+
+    verifyUtilityActionsOrderAndPlacement(
+        *window,
+        rootItem,
+        QStringLiteral( "shellSchedulingButton" ),
+        QStringLiteral( "shellSupportButton" ),
+        QStringLiteral( "preferencesButton" ),
+        "utility-actions-shell" );
 }
 
 static void verifyColourApprox( const QColor &actual, const QColor &expected, const int tolerance, const char *context )

@@ -5,6 +5,9 @@
         <file>ShellPage.qml</file>
         <file>HelpTip.qml</file>
         <file>PreferencesOverlay.qml</file>
+        <file>SchedulingOverlay.qml</file>
+        <file>SupportOverlay.qml</file>
+        <file>VcUtilityActions.qml</file>
         <file>VcButton.qml</file>
         <file>VcCheckBox.qml</file>
         <file>VcCloseButton.qml</file>

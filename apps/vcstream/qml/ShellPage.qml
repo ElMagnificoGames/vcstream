@@ -49,6 +49,8 @@ Page {
 
     signal disconnectRequested()
     signal preferencesRequested()
+    signal schedulingRequested()
+    signal supportRequested()
 
     property int selectedSourceIndex: -1
     property string selectedSourceName: ""
@@ -147,7 +149,7 @@ Page {
 
                 Label {
                     text: "VCStream"
-                    font.pixelSize: ( theme ? theme.fontHeadingPx : 18 )
+                    font.pixelSize: ( theme ? theme.fontShellTitlePx : 22 )
                     font.family: ( theme ? theme.headingFontFamily : Qt.application.font.family )
                     font.capitalization: Font.SmallCaps
                     color: ( theme ? theme.textColour : pal.text )
@@ -180,29 +182,27 @@ Page {
                     }
                 }
 
-                VcToolButton {
-                    id: preferencesButton
-                    objectName: "preferencesButton"
+                VcUtilityActions {
+                    id: shellUtilityActions
                     theme: root.theme
-                    tone: "neutral"
-                    hoverEnabled: true
+                    schedulingObjectName: "shellSchedulingButton"
+                    supportObjectName: "shellSupportButton"
+                    preferencesObjectName: "preferencesButton"
 
-                    text: "Preferences"
-                    icon.name: "preferences-system"
-                    display: ( appSupervisor && appSupervisor.themeIconAvailable( icon.name ) ? AbstractButton.IconOnly : AbstractButton.TextOnly )
-
-                    onHoveredChanged: {
-                        if ( hovered ) {
-                            root.showHelp( preferencesButton, "Open preferences." )
-                        } else {
-                            root.hideHelp()
-                        }
+                    onSchedulingRequested: {
+                        root.hideHelp()
+                        root.schedulingRequested()
                     }
-
-                    onClicked: {
+                    onSupportRequested: {
+                        root.hideHelp()
+                        root.supportRequested()
+                    }
+                    onPreferencesRequested: {
                         root.hideHelp()
                         root.preferencesRequested()
                     }
+                    onHoverHelpRequested: function( target, text ) { root.showHelp( target, text ) }
+                    onHoverHelpHideRequested: root.hideHelp()
                 }
             }
         }

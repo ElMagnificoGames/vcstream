@@ -118,6 +118,7 @@ ApplicationWindow {
         readonly property int fontSmallPx: Math.max( 10, fontPx( Math.max( 10, baseFontPxUnscaled - 2 ) ) )
         readonly property int fontHeadingPx: Math.max( fontBasePx + 2, Math.round( fontBasePx * 1.28 ) )
         readonly property int fontTitlePx: Math.max( fontHeadingPx + 6, Math.round( fontBasePx * 2.0 ) )
+        readonly property int fontShellTitlePx: Math.max( fontHeadingPx + 4, Math.round( fontBasePx * 1.55 ) )
 
         readonly property int spaceNudge: spacePx( 4 )
         readonly property int spaceCompact: spacePx( 8 )
@@ -462,6 +463,8 @@ ApplicationWindow {
     font.pixelSize: uiTheme.fontBasePx
 
     property bool preferencesOpen: false
+    property bool schedulingOpen: false
+    property bool supportOpen: false
 
     function showHelp( targetItem, helpText ) {
         hoverHelp.target = targetItem
@@ -500,6 +503,8 @@ ApplicationWindow {
 
     function openPreferences( categoryIndex ) {
         root.hideHelp()
+        root.schedulingOpen = false
+        root.supportOpen = false
         var idx = 0
         if ( typeof categoryIndex !== "undefined" && categoryIndex !== null ) {
             var parsed = Number( categoryIndex )
@@ -520,6 +525,28 @@ ApplicationWindow {
         preferencesOpen = false
     }
 
+    function openScheduling() {
+        root.hideHelp()
+        root.preferencesOpen = false
+        root.supportOpen = false
+        root.schedulingOpen = true
+    }
+
+    function closeScheduling() {
+        root.schedulingOpen = false
+    }
+
+    function openSupport() {
+        root.hideHelp()
+        root.preferencesOpen = false
+        root.schedulingOpen = false
+        root.supportOpen = true
+    }
+
+    function closeSupport() {
+        root.supportOpen = false
+    }
+
 
     Component {
         id: landingComponent
@@ -536,6 +563,12 @@ ApplicationWindow {
             }
             onPreferencesRequested: {
                 root.openPreferences( 0 )
+            }
+            onSchedulingRequested: {
+                root.openScheduling()
+            }
+            onSupportRequested: {
+                root.openSupport()
             }
             onHoverHelpRequested: function( target, text ) {
                 root.showHelp( target, text )
@@ -563,6 +596,12 @@ ApplicationWindow {
             }
             onPreferencesRequested: {
                 root.openPreferences( 0 )
+            }
+            onSchedulingRequested: {
+                root.openScheduling()
+            }
+            onSupportRequested: {
+                root.openSupport()
             }
         }
     }
@@ -600,6 +639,31 @@ ApplicationWindow {
         onCloseRequested: {
             root.closePreferences()
         }
+    }
+
+    SchedulingOverlay {
+        id: schedulingOverlay
+        objectName: "schedulingOverlay"
+        anchors.fill: overlayLayer
+        open: root.schedulingOpen
+        theme: uiTheme
+        appPalette: root.palette
+        url: "https://elmagnifico.co.uk/schedule/"
+
+        onCloseRequested: root.closeScheduling()
+    }
+
+    SupportOverlay {
+        id: supportOverlay
+        objectName: "supportOverlay"
+        anchors.fill: overlayLayer
+        open: root.supportOpen
+        theme: uiTheme
+        appPalette: root.palette
+        twitchUrl: "https://twitch.tv/elmagnificogames"
+        socialsUrl: "https://elmagnifico.co.uk/socials"
+
+        onCloseRequested: root.closeSupport()
     }
 
     Component.onCompleted: {
