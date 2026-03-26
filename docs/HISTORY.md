@@ -699,6 +699,37 @@ Cleanup
 - ADR location:
   - `docs/adr/0002-trust-model.md`
 
+## Task 2.3 — Write a rendezvous/NAT-traversal scope note
+
+### What
+
+- Added an ADR clarifying the difference between room discovery (rendezvous) and actual network reachability (NAT traversal).
+- Made the responsibility split explicit between the desktop app (`vcstream`) and the separate headless rendezvous service (`vcstream_rendezvous`).
+
+### Why
+
+- A room directory service solves discovery, not connectivity.
+- Keeping these concepts separate prevents overpromising and keeps future networking work scoped honestly.
+
+### Acceptance criteria
+
+- Note explains the difference between room discovery and actual reachability.
+- Note states whether NAT traversal is a real medium-term goal or merely a possible future idea.
+- Note records what early design choices this affects.
+
+### Decisions
+
+- `vcstream_rendezvous` may assist hole punching by providing endpoint hints and simple coordination, but it is still not a trust anchor.
+- NAT traversal/hole punching is a real medium-term goal, but it will be treated as best-effort (not guaranteed).
+- Rendezvous records may include the host identity fingerprint to improve early warning/diagnostics, but clients must still verify host identity from authenticated DTLS peer material (ADR 0002).
+- TURN-like third-party relaying is deferred unless explicitly added later.
+- Failure UX: the app should provide simple fallback guidance, and may offer an optional advanced diagnostics view for troubleshooting.
+
+### Technical notes
+
+- ADR location:
+  - `docs/adr/0003-rendezvous-and-nat-traversal-scope.md`
+
 ## Maintenance — Fix `-Wconversion` build breaks; ensure accent changes repaint ComboBox indicator
 
 ### What
