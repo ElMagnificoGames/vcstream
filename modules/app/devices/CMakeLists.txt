@@ -7,6 +7,7 @@ target_link_libraries( vcstream_app_devices PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Multimedia
+    vcstream_warnings
 )
 
 target_include_directories( vcstream_app_devices PUBLIC

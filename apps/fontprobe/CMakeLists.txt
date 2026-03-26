@@ -7,7 +7,9 @@ target_link_libraries( vcstream_fontprobe PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
+    vcstream_warnings
     vcstream_app_defence
+    vcstream_app_platform
 )
 
 target_include_directories( vcstream_fontprobe PRIVATE

@@ -50,7 +50,7 @@ private:
         int pixelSize;
     };
 
-    friend uint qHash( const FontPreviewSafetyCache::Key &k, uint seed );
+    friend size_t qHash( const FontPreviewSafetyCache::Key &k, size_t seed );
     friend bool operator==( const FontPreviewSafetyCache::Key &a, const FontPreviewSafetyCache::Key &b );
 
     static Key makeKey( const QString &family, int pixelSize );
@@ -74,7 +74,7 @@ inline bool operator==( const FontPreviewSafetyCache::Key &a, const FontPreviewS
     return a.pixelSize == b.pixelSize && a.family == b.family;
 }
 
-inline uint qHash( const FontPreviewSafetyCache::Key &k, uint seed = 0 )
+inline size_t qHash( const FontPreviewSafetyCache::Key &k, size_t seed = 0 )
 {
     return qHash( k.family, seed ) ^ ( qHash( k.pixelSize, seed ) + 0x9e3779b9 + ( seed << 6 ) + ( seed >> 2 ) );
 }

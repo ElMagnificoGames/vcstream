@@ -597,3 +597,45 @@ Cleanup
   - `apps/unittests/qml/tst_qml_ui.cpp`
 - Version bump for this feature task:
   - `CMakeLists.txt`
+
+## Task 1.5a — Stabilise Qt runtime defaults (Windows + QML warning gate)
+
+### What
+
+- Added an app-owned Qt Quick Controls configuration (`qtquickcontrols2.conf`) that defaults the control style to `Basic` so the app's wrapper controls can customise `contentItem`/`background` without Qt emitting warnings.
+- Introduced a small platform shim module that applies startup-time Qt defaults that must run before `QGuiApplication` is constructed.
+- On Windows, the shim sets `QT_QPA_FONTDIR` to `%WINDIR%/Fonts` when not already specified, preventing Qt's FreeType font database backend from warning about missing SDK font directories.
+- Wired the shim into all GUI entry points in this repository that construct `QGuiApplication` (`vcstream`, the QML smoke-test runner, and `vcstream_fontprobe`).
+- Centralised the compiler warning policy into a shared CMake interface target so all in-repo targets build with consistent strict warnings.
+
+### Why
+
+- QML warnings are a hard test gate in this repository; Qt Quick Controls native styles on Windows can emit warnings when the app customises control internals.
+- The font subsystem warning indicates Qt is probing an SDK directory that does not exist in typical deployments; leaving this unresolved causes the warning gate to fail and makes Windows behaviour noisier than Linux.
+- Centralising these pre-`QGuiApplication` adjustments avoids platform-specific clutter in otherwise cross-platform entrypoint code and ensures consistent behaviour across executables.
+
+### Acceptance criteria
+
+- On Windows, `vcstream` and `tst_qml_ui` start without Qt Quick Controls warnings about unsupported customisation.
+- On Windows, startup does not emit `QFontDatabase: Cannot find font directory .../lib/fonts` warnings under offscreen/headless runs.
+- The QML smoke tests continue to fail on real warnings (the fix removes underlying causes; it does not suppress warnings).
+
+### Decisions
+
+- Style default: set Qt Quick Controls 2 to `Basic` via `qtquickcontrols2.conf` rather than using environment variables or per-machine configuration.
+- Platform shims: introduced `modules/app/platform/qtshims.*` as a narrowly scoped place for platform-specific Qt startup defaults, with an explicit warning against growth into a general helper bucket.
+- Warnings policy: apply `-Wconversion` (and `-Werror`) consistently across non-MSVC builds so narrowing/sign-conversion issues do not slip through silently on Linux.
+
+### Technical notes
+
+- Qt Quick Controls configuration:
+  - `apps/vcstream/qml/qtquickcontrols2.conf`
+  - `apps/vcstream/qml/qml.qrc`
+- Platform shim module:
+  - `modules/app/platform/qtshims.h`
+  - `modules/app/platform/qtshims.cpp`
+  - `modules/app/platform/qtshims-dd.txt`
+- Shim call sites:
+  - `apps/vcstream/main.cpp`
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+  - `apps/fontprobe/main.cpp`

@@ -34,6 +34,9 @@ cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.y/<toolchain>
 cmake --build build
 ```
 
+Notes:
+- Compiler warnings are treated as errors by default. The warning policy is centralised in the root `CMakeLists.txt` via the `vcstream_warnings` interface target, and most in-repo targets link it.
+
 ## Run
 
 The binary is written to `build/bin/`.

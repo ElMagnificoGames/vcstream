@@ -5,6 +5,7 @@ add_executable( tst_style
 target_link_libraries( tst_style PRIVATE
     Qt6::Core
     Qt6::Test
+    vcstream_warnings
     vcstream_app_defence
 )
 

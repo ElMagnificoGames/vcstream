@@ -7,6 +7,7 @@ target_link_libraries( tst_appsupervisor PRIVATE
     Qt6::Gui
     Qt6::Multimedia
     Qt6::Test
+    vcstream_warnings
     vcstream_app_defence
     vcstream_app_lifecycle
 )

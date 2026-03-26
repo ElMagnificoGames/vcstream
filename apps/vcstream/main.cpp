@@ -12,6 +12,7 @@
 #include <QtGlobal>
 
 #include "modules/app/defence/crashguard.h"
+#include "modules/app/platform/qtshims.h"
 #include "modules/app/lifecycle/appsupervisor.h"
 #include "modules/ui/colour/oklchutil.h"
 #include "modules/ui/placement/windowplacement.h"
@@ -32,6 +33,8 @@ int main( int argc, char **argv )
 
         localArgc = argc;
         localArgv = argv;
+
+        qtshims::applyBeforeQGuiApplication();
 
         QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
         QCoreApplication::setApplicationName( QStringLiteral( "vcstream" ) );

@@ -5,6 +5,7 @@ add_executable( tst_crashguard
 target_link_libraries( tst_crashguard PRIVATE
     Qt6::Core
     Qt6::Test
+    vcstream_warnings
     vcstream_app_defence
 )
 

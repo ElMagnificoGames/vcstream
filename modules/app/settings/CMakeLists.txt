@@ -5,6 +5,7 @@ add_library( vcstream_app_settings
 
 target_link_libraries( vcstream_app_settings PRIVATE
     Qt6::Core
+    vcstream_warnings
 )
 
 target_include_directories( vcstream_app_settings PUBLIC

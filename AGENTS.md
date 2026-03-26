@@ -31,6 +31,14 @@ cmake --build build
 ./build/bin/vcstream
 ```
 
+### Warnings policy (CMake)
+
+Strict warnings are centralised in the root `CMakeLists.txt` as the INTERFACE target `vcstream_warnings` (`/W4 /WX` on MSVC; `-Wall -Wextra -Wpedantic -Wconversion -Werror` elsewhere).
+
+When adding any new library or executable target, link `vcstream_warnings` (typically `PRIVATE`) so the warning policy applies consistently across the whole repo. Avoid reintroducing per-target warning flag blocks unless there is a deliberate, documented exception.
+
+Note: MSVC `/WX` will fail on unused parameters; use `Q_UNUSED( x )` where appropriate rather than weakening the warning policy.
+
 ### Git Policy
 
 See `docs/CODE-QT6.md`.
@@ -108,15 +116,38 @@ When adding or editing any module DD file (`*-dd.txt`), follow this checklist.
 - Use the DD template in `docs/DD-TEMPLATE.txt` as the starting point.
 - Keep the Public interface section contract-like (arguments, ownership, lifetime, thread safety, errors).
 
-## UX and UI
+## Codebase hygiene
 
-### Prefer Existing Implementations (Avoid Duplication)
+### Prefer existing implementations (avoid duplication)
 
 Before adding a new component/utility (especially QML controls, styling helpers, and common UI behaviours), first check whether the repository already has an app-owned implementation.
 
 - **Gate:** do a quick search (Glob/Grep) for an existing equivalent and reuse it by default.
 - Only introduce a new implementation when there is a clear, documented reason the existing one cannot be used (missing capability, incorrect abstraction boundary, or a measurable performance/behaviour problem).
 - When you do add something new, explicitly remove or migrate redundant alternatives in the same change so the codebase does not accumulate parallel implementations (for example: two different scrollbars).
+
+### QML warning hygiene
+
+QML warnings are treated as test failures.
+
+Warnings are a gate:
+- Do not avoid or downgrade `qWarning()` / QML warnings to make tests pass.
+- If a warning indicates a real fault (missing resource, failed registration, invalid state), emit the warning and fix the underlying cause.
+- Use `qInfo()` / `qDebug()` only for non-fault informational messages.
+
+- If you change QML behaviour, you MUST update `apps/unittests/qml/tst_qml_ui.cpp` to navigate to the new/changed UI state and interact with it (click/hover/type as appropriate).
+- Add stable `objectName` values in QML for any controls that tests need to locate.
+- Prefer testing real user flows (start screen -> join/host -> disconnect) rather than directly poking internal state.
+- Avoid deprecated implicit signal parameter injection in QML handlers. Prefer explicit function parameters (for example: `onPressed: function( mouse ) { ... }`).
+- Ensure the warning gate actually intercepts warnings: capture both `QQmlApplicationEngine::warnings` and Qt message output, and install message handlers within the QtTest lifecycle (for example: `initTestCase` / `cleanupTestCase`).
+
+Smoke test policy (project-specific):
+- `apps/unittests/qml/tst_qml_ui.cpp` performs an automatic interaction sweep.
+- Any interactive control authored under `qrc:/qml/*` MUST have a stable `objectName` so the sweep can report and reproduce failures.
+- The sweep hovers all interactive controls and clicks most controls.
+- For controls that are unsafe or non-deterministic to auto-click in CI (engine reload, external links, process exit, etc.), set `property bool testSkipActivate: true` on the control; the sweep will still hover it.
+
+## UI and UX
 
 ### Copy
 
@@ -145,28 +176,10 @@ Be careful with UI elements that appear/disappear on hover or focus.
 - Watch for hover oscillation loops (cursor hovers -> UI appears -> geometry shifts -> hover ends -> geometry shifts back -> hover starts).
 - If you add or change hover behaviour, extend `apps/unittests/qml/tst_qml_ui.cpp` to reproduce it (hover/move/click-outside) and ensure it emits no warnings.
 
-### QML warning hygiene
 
-QML warnings are treated as test failures.
+## Language
 
-Warnings are a gate:
-- Do not avoid or downgrade `qWarning()` / QML warnings to make tests pass.
-- If a warning indicates a real fault (missing resource, failed registration, invalid state), emit the warning and fix the underlying cause.
-- Use `qInfo()` / `qDebug()` only for non-fault informational messages.
+### British spelling
 
-- If you change QML behaviour, you MUST update `apps/unittests/qml/tst_qml_ui.cpp` to navigate to the new/changed UI state and interact with it (click/hover/type as appropriate).
-- Add stable `objectName` values in QML for any controls that tests need to locate.
-- Prefer testing real user flows (start screen -> join/host -> disconnect) rather than directly poking internal state.
-- Avoid deprecated implicit signal parameter injection in QML handlers. Prefer explicit function parameters (for example: `onPressed: function( mouse ) { ... }`).
-- Ensure the warning gate actually intercepts warnings: capture both `QQmlApplicationEngine::warnings` and Qt message output, and install message handlers within the QtTest lifecycle (for example: `initTestCase` / `cleanupTestCase`).
-
-Smoke test policy (project-specific):
-- `apps/unittests/qml/tst_qml_ui.cpp` performs an automatic interaction sweep.
-- Any interactive control authored under `qrc:/qml/*` MUST have a stable `objectName` so the sweep can report and reproduce failures.
-- The sweep hovers all interactive controls and clicks most controls.
-- For controls that are unsafe or non-deterministic to auto-click in CI (engine reload, external links, process exit, etc.), set `property bool testSkipActivate: true` on the control; the sweep will still hover it.
-
-## British spelling
-
-- Use British spelling, for example: "centre", "colour", "behaviour", "organisation", "optimise".  This includes, but is not limited to, in source code, documentation, and user-facing UI copy.
+- Use British spelling, for example: "centre", "colour", "behaviour", "organisation", "optimise". This includes, but is not limited to, in source code, documentation, and user-facing UI copy.
 - Do not change established external names/identifiers (Qt types/APIs, class names, file names, protocol fields, third-party terminology) or quotations.

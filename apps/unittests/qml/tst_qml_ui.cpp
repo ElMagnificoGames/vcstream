@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 #include <QColor>
+#include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
@@ -40,6 +41,8 @@
 #include <QUrl>
 #include <QtGlobal>
 
+#include "modules/app/platform/qtshims.h"
+
 #include <QQmlContext>
 #include <QQmlEngine>
 
@@ -62,6 +65,8 @@ QScopedPointer<QTemporaryDir> g_settingsDir;
 
 QString formatMessage( const QtMsgType type, const QMessageLogContext &context, const QString &message )
 {
+    Q_UNUSED( type );
+
     const QString file = context.file ? QString::fromLatin1( context.file ) : QString();
     const QString function = context.function ? QString::fromLatin1( context.function ) : QString();
 
@@ -367,6 +372,8 @@ qreal contrastRatio( const QColor &a, const QColor &b )
 
 QColor findBackgroundColourForItem( QQuickWindow &window, QQuickItem *item )
 {
+    Q_UNUSED( window );
+
     QQuickItem *cur;
 
     cur = ( item != nullptr ) ? item->parentItem() : nullptr;
@@ -579,6 +586,8 @@ void verifyInteractiveItemsContainedWithinParents( QQuickWindow &window, QQuickI
 
 void verifyScrollBarsAreNotDegenerate( QQuickWindow &window, QQuickItem *rootItem, const char *step )
 {
+    Q_UNUSED( window );
+
     QVector<QQuickItem *> all;
     collectItemsDepthFirst( rootItem, all );
 
@@ -2817,6 +2826,8 @@ int main( int argc, char **argv )
 
         localArgc = argc;
         localArgv = argv;
+
+        qtshims::applyBeforeQGuiApplication();
 
         QGuiApplication app( localArgc, localArgv );
         tst_QmlUi tc;

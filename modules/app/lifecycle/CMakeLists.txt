@@ -6,6 +6,7 @@ add_library( vcstream_app_lifecycle
 target_link_libraries( vcstream_app_lifecycle PRIVATE
     Qt6::Core
     Qt6::Gui
+    vcstream_warnings
     vcstream_app_settings
     vcstream_app_devices
 )

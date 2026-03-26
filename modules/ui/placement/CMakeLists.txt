@@ -6,6 +6,7 @@ add_library( vcstream_ui_placement
 target_link_libraries( vcstream_ui_placement PRIVATE
     Qt6::Core
     Qt6::Gui
+    vcstream_warnings
     vcstream_ui_geometry
 )
 

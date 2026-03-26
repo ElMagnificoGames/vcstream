@@ -27,6 +27,7 @@
 #include <QQuickView>
 
 #include "modules/app/defence/crashguard.h"
+#include "modules/app/platform/qtshims.h"
 
 namespace {
 
@@ -1023,6 +1024,8 @@ int main( int argc, char **argv )
 
         QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
         QCoreApplication::setApplicationName( QStringLiteral( "vcstream_fontprobe" ) );
+
+        qtshims::applyBeforeQGuiApplication();
 
         QGuiApplication app( localArgc, localArgv );
         QCommandLineParser parser;

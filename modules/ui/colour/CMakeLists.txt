@@ -8,6 +8,7 @@ add_library( vcstream_ui_colour
 target_link_libraries( vcstream_ui_colour PRIVATE
     Qt6::Core
     Qt6::Gui
+    vcstream_warnings
 )
 
 target_include_directories( vcstream_ui_colour PUBLIC

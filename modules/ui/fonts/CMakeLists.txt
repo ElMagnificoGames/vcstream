@@ -13,6 +13,7 @@ add_library( vcstream_ui_fonts
 target_link_libraries( vcstream_ui_fonts PRIVATE
     Qt6::Core
     Qt6::Gui
+    vcstream_warnings
 )
 
 target_include_directories( vcstream_ui_fonts PUBLIC

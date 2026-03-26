@@ -5,6 +5,7 @@ add_executable( tst_windowrectfitter
 target_link_libraries( tst_windowrectfitter PRIVATE
     Qt6::Core
     Qt6::Test
+    vcstream_warnings
     vcstream_app_defence
     vcstream_ui_geometry
 )

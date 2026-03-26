@@ -1,0 +1,41 @@
+= QtShims
+
+== Description
+
+I am a small collection of platform-specific Qt shims and startup defaults.
+I collaborate with application entry points (executables and test runners) that need a consistent Qt runtime configuration across platforms.
+I do not become a general-purpose utility module or a grab-bag of unrelated helpers; additions must be narrowly scoped and justified by a concrete platform/Qt behaviour problem.
+
+State model:
+- Thread affinity: process startup (main thread), before `QGuiApplication` is constructed.
+- Lifetime/ownership: I am stateless.
+- Re-entrancy: re-entrant, but intended to be called once during startup.
+
+== Public interface
+
+- `void qtshims::applyBeforeQGuiApplication()` applies platform-specific Qt startup defaults.
+
+  Behaviour:
+  - Must be called before constructing `QGuiApplication`.
+  - Does not override user-provided environment variables.
+  - Effects are platform-dependent and may be a no-op on some platforms.
+
+  Thread safety:
+  - Thread-safe: No (startup-only).
+  - Re-entrant: Yes.
+
+  Errors:
+  - No explicit failure reporting.
+  - Best-effort; may do nothing if prerequisites are not present.
+
+== Implementation details
+
+- Windows:
+  - If `QT_QPA_FONTDIR` is unset, set it to `%WINDIR%/Fonts` (or `C:\\Windows\\Fonts`) when the directory exists.
+  - Motivation: avoid Qt font database warnings about missing SDK font directories in headless/offscreen runs.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.
+- Platform-specific implementations: Windows and non-Windows.

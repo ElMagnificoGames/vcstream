@@ -11,8 +11,10 @@ target_link_libraries( tst_qml_ui PRIVATE
     Qt6::QuickControls2
     Qt6::Multimedia
     Qt6::Test
+    vcstream_warnings
     vcstream_app_defence
     vcstream_app_lifecycle
+    vcstream_app_platform
     vcstream_ui_placement
     vcstream_ui_colour
     vcstream_ui_theme
