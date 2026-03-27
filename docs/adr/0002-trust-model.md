@@ -36,6 +36,22 @@ What matters is proof of possession:
 
 The out-of-band check is how the user verifies that the public key they have received over the network really is the host’s public key, and not an attacker’s.
 
+#### Identity code format
+
+The identity code is a human-friendly display form of a cryptographic fingerprint.
+
+- Fingerprint input: the canonical public key bytes for the device identity.
+  - Prefer a stable DER encoding of the public key as used by DTLS peer identity (for example an X.509 SubjectPublicKeyInfo/SPKI encoding).
+  - The exact public key type and canonical encoding are part of the implementation work, but the key requirement is: the same key must always produce the same bytes.
+- Fingerprint function: `SHA-256( "VCStream identity v1" || public_key_bytes )`.
+  - The prefix is domain separation so we do not accidentally re-use the hash in some unrelated context.
+  - Here `||` means byte concatenation, not a logical operator.
+- Stored form: store the full 256-bit fingerprint.
+- Display form: show the first 80 bits of the fingerprint encoded with Crockford Base32.
+  - Display 16 characters grouped as `XXXX-XXXX-XXXX-XXXX`.
+  - The display code is case-insensitive.
+  - Crockford Base32 is chosen because it is human-friendly (case-insensitive and avoids common ambiguous characters) and works well when read aloud, which reduces mistakes when comparing codes out-of-band.
+
 ### Host identity trust (TOFU + first-time out-of-band check)
 
 We use TOFU (Trust On First Use) with an explicit first-time check.
