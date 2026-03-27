@@ -97,9 +97,10 @@ I do not:
 ### MediaCapture
 
 I am the local capture controller.
-I enumerate local capture devices (cameras, microphones, screens/windows), start/stop capture, and report local source availability/state changes.
+I start and stop capture for local devices and report local source availability/state changes.
 
 I collaborate with `SourceCatalogue` to publish local source state.
+I do not perform device enumeration (that is `LocalDeviceCatalogue`).
 I do not decide which remote sources are subscribed to, and I do not implement UI presentation or HTTP export.
 
 State model (initial): I own capture lifetimes; if device threads/callbacks exist, I translate them into safe state updates that do not leak exceptions across Qt boundaries.
@@ -131,7 +132,7 @@ I build and own the local audio topology: which audio sources exist, how they ar
 I own per-source audio policy (mute/volume/monitor/publish) and, where needed, mixing/downmixing for local listening.
 
 I collaborate with `MediaCapture` (voice/mic sources), `MusicPlaylistSource` (music), `SourceCatalogue` (source identity/state), `RoomSession` (session policy), and `Diagnostics`.
-I do not perform device enumeration (that is `MediaCapture`) and I do not host the relay (that is `RelayServer`).
+I do not perform device enumeration (that is `LocalDeviceCatalogue`) and I do not host the relay (that is `RelayServer`).
 
 State model (initial): I am configured from the UI/session policy but I own the runtime audio graph and fail safely when sources disappear or reappear.
 

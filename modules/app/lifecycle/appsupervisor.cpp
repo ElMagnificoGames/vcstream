@@ -6,8 +6,9 @@
 #include <QFontDatabase>
 #include <QIcon>
 
-#include "modules/app/devices/localdevicecatalogue.h"
+#include "modules/devices/catalogue/localdevicecatalogue.h"
 #include "modules/app/settings/apppreferences.h"
+#include "modules/devices/capture/mediacapture.h"
 #include "modules/ui/fonts/bundledfonts.h"
 #include "modules/ui/fonts/fontpreviewsafetycache.h"
 
@@ -24,6 +25,7 @@ AppSupervisor::AppSupervisor( QObject *parent )
 
     m_preferences = new AppPreferences( this );
     m_deviceCatalogue = new LocalDeviceCatalogue( this );
+    m_mediaCapture = new MediaCapture( this );
     m_fontPreviewSafetyCache = new FontPreviewSafetyCache( this );
 }
 
@@ -80,6 +82,11 @@ QObject *AppSupervisor::preferences() const
 QObject *AppSupervisor::deviceCatalogue() const
 {
     return m_deviceCatalogue;
+}
+
+QObject *AppSupervisor::mediaCapture() const
+{
+    return m_mediaCapture;
 }
 
 QObject *AppSupervisor::fontPreviewSafetyCache() const

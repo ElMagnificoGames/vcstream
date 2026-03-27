@@ -285,7 +285,7 @@
   - Store: `modules/app/settings/apppreferences.h`, `modules/app/settings/apppreferences.cpp`, `modules/app/settings/apppreferences-dd.txt`
   - Theme plumbing: `apps/vcstream/qml/main.qml`
 - Device catalogue:
-  - Service: `modules/app/devices/localdevicecatalogue.h`, `modules/app/devices/localdevicecatalogue.cpp`, `modules/app/devices/localdevicecatalogue-dd.txt`
+  - Service: `modules/devices/catalogue/localdevicecatalogue.h`, `modules/devices/catalogue/localdevicecatalogue.cpp`, `modules/devices/catalogue/localdevicecatalogue-dd.txt`
   - Enumeration sources: `QGuiApplication::screens()`, `QMediaDevices`, and (when available) `QWindowCapture`.
 - Wiring to QML:
   - `AppSupervisor` now owns and exposes `preferences` and `deviceCatalogue` objects:
@@ -801,3 +801,98 @@ Cleanup
 - `-Wconversion` build fixes:
   - `modules/ui/colour/oklchcolour.cpp`
   - `modules/ui/fonts/fontpreviewsafetycheckerdefault.cpp`
+
+## Task 3.2 — Start and stop local camera preview
+
+### What
+
+- Implemented a local camera preview surface in the in-room Source Inspector for the built-in "Camera" source placeholder.
+  - Users can select a camera device and start/stop preview.
+  - Changing the selected device whilst preview is running stops and restarts the preview to avoid unstable mid-stream switching.
+- Ensured camera capture is released when the inspector closes (preview stops on close).
+- Added QML smoke-test coverage to verify the camera preview control surface exists, whilst explicitly avoiding starting the camera in tests.
+
+### Why
+
+- This is the first concrete proof that a real local media source can be previewed inside the app shell without committing yet to networking, source publication, or relay/media transport architecture.
+- Keeping the preview behind an explicit start action (and stopping it on close) reduces the risk of surprising camera activation and makes CI tests more deterministic.
+
+### Acceptance criteria
+
+- A selected camera preview appears in-app.
+- The user can stop/start preview.
+- Switching cameras works or is handled gracefully.
+
+### Decisions
+
+- Preview implementation lives in QML using Qt Multimedia (`Camera` + `CaptureSession` + `VideoOutput`) for now, scoped to the Source Inspector.
+  - This keeps the change small and UI-facing whilst later work can move capture into a dedicated service module.
+- The preview start/stop button is marked `testSkipActivate: true` so the automatic interaction sweep will not activate hardware/permission flows in CI.
+
+### Technical notes
+
+- Source Inspector preview UI:
+  - `apps/vcstream/qml/ShellPage.qml`
+- QML smoke test assertions:
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+- Version bump for this feature task:
+  - `CMakeLists.txt`
+
+## Task 3.2 follow-up — Shared camera capture; Preferences camera preview
+
+### What
+
+- Replaced the QML-only camera capture pipeline with a C++ capture service that enforces "one capture stream per camera device id".
+  - Multiple UI surfaces can now preview the same camera without reopening the device.
+- Added camera preview access from Preferences (Devices -> Cameras -> Preview) using the same capture service.
+  - The Preferences panel expands to a near-full-window preview page with a Back button.
+- Added a null (synthetic) camera backend to the capture service.
+  - This enables deterministic start/stop/re-open behaviour tests without relying on physical devices or permissions.
+- Promoted devices out of the `modules/app/*` catch-all by introducing `modules/devices/*`.
+  - Local device enumeration moved to `modules/devices/catalogue/`.
+  - New capture service lives in `modules/devices/capture/`.
+- Strengthened QML smoke tests to gate scrollbars for overflowing scroll areas.
+- Updated the Shell "Sources" list to enumerate individual devices with section headings rather than using category placeholders.
+- Updated Preferences so camera preview is opened from a per-camera row action (not from the section heading).
+
+### Why
+
+- Future publishing will allow multiple cameras to be active at once; capture lifetime must be per-device and shareable.
+- Preferences are a natural place to validate camera selection/permissions before joining a room.
+- A dedicated devices domain keeps `modules/app/*` focused on orchestration rather than becoming a dumping ground for services.
+
+### Acceptance criteria
+
+- Starting camera preview from Shell and from Preferences does not open duplicate camera devices.
+- Closing the last preview stops the capture immediately.
+- UI shows a large preview surface when requested from Preferences.
+- A camera preview can be started, stopped, and started again (no stale capture state).
+
+### Decisions
+
+- `MediaCapture` is a C++ UI-thread service owned by `AppSupervisor` and exposed to QML.
+- QML connects a `VideoOutput` by passing its read-only `videoSink` into the capture handle (`setViewSink(...)`).
+- The capture service supports multiple backend implementations (for example, a Qt camera backend and a NullCameraBackend implementation).
+
+### Technical notes
+
+- Devices module restructure:
+  - `modules/devices/catalogue/`
+  - `modules/devices/capture/`
+- Capture service:
+  - `modules/devices/capture/mediacapture.h`, `modules/devices/capture/mediacapture.cpp`
+  - `modules/devices/capture/camerapreviewhandle.h`, `modules/devices/capture/camerapreviewhandle.cpp`
+  - `modules/devices/capture/mediacapture-dd.txt`
+  - `modules/devices/capture/camerapreviewhandle-dd.txt`
+  - `modules/devices/capture/camerabackend.h`, `modules/devices/capture/camerabackend-dd.txt`
+  - `modules/devices/capture/camerastreambackend.h`, `modules/devices/capture/camerastreambackend-dd.txt`
+  - `modules/devices/capture/qtcamerabackend.h`, `modules/devices/capture/qtcamerabackend.cpp`, `modules/devices/capture/qtcamerabackend-dd.txt`
+  - `modules/devices/capture/nullcamerabackend.h`, `modules/devices/capture/nullcamerabackend.cpp`, `modules/devices/capture/nullcamerabackend-dd.txt`
+- QML integration:
+  - `apps/vcstream/qml/ShellPage.qml`
+  - `apps/vcstream/qml/PreferencesOverlay.qml`
+- AppSupervisor surface:
+  - `modules/app/lifecycle/appsupervisor.h`, `modules/app/lifecycle/appsupervisor.cpp`, `modules/app/lifecycle/appsupervisor-dd.txt`
+- Tests:
+  - `apps/unittests/qml/tst_qml_ui.cpp`
+  - `apps/unittests/devices/capture/tst_mediacapture.cpp`

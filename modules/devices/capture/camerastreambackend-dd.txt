@@ -1,0 +1,35 @@
+= CameraStreamBackend
+
+== Description
+
+I am a camera stream backend interface.
+I represent a single running camera stream that can be started and stopped and that emits decoded video frames.
+
+I collaborate with `MediaCapture`, which owns per-device stream instances and forwards frames to multiple view sinks.
+I collaborate with backend implementations such as `QtCameraBackend` and `NullCameraBackend`.
+I do not select devices, I do not enumerate devices, and I do not render video.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by the per-device stream object inside `MediaCapture`.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `void start()` begins producing frames.
+- `void stop()` stops producing frames.
+- `videoFrameChanged( const QVideoFrame &frame )` is emitted when a new frame is available.
+
+Thread safety:
+- Thread-safe: No.
+- Notes: Intended for UI-thread use; frame emission and fan-out occur on the same thread.
+
+== Implementation details
+
+- Backends may be hardware-backed (Qt Multimedia) or synthetic (`NullCameraBackend`).
+- `MediaCapture` may attach multiple consumers to the same stream; the backend is not aware of consumers.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore, QtMultimedia).

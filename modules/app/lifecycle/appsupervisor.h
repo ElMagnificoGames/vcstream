@@ -13,6 +13,7 @@ class AppSupervisor final : public QObject
     Q_PROPERTY( bool hostRoomEnabled READ hostRoomEnabled WRITE setHostRoomEnabled NOTIFY hostRoomEnabledChanged )
     Q_PROPERTY( QObject *preferences READ preferences CONSTANT )
     Q_PROPERTY( QObject *deviceCatalogue READ deviceCatalogue CONSTANT )
+    Q_PROPERTY( QObject *mediaCapture READ mediaCapture CONSTANT )
     Q_PROPERTY( QObject *fontPreviewSafetyCache READ fontPreviewSafetyCache CONSTANT )
     Q_PROPERTY( QString systemFontFamily READ systemFontFamily CONSTANT )
     Q_PROPERTY( QString victorianBodyFontFamily READ victorianBodyFontFamily CONSTANT )
@@ -31,6 +32,7 @@ public:
 
     QObject *preferences() const;
     QObject *deviceCatalogue() const;
+    QObject *mediaCapture() const;
     QObject *fontPreviewSafetyCache() const;
     QString systemFontFamily() const;
 
@@ -53,6 +55,7 @@ private:
 
     QObject *m_preferences;
     QObject *m_deviceCatalogue;
+    QObject *m_mediaCapture;
     QObject *m_fontPreviewSafetyCache;
 
     QString m_victorianBodyFontFamily;

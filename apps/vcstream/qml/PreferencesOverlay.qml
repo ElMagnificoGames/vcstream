@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtMultimedia 6.0
 
 Control {
     id: root
@@ -12,7 +13,92 @@ Control {
     property var theme
     property var fontFamiliesCache: []
 
+    // Camera preview (device registry is owned by AppSupervisor).
+    property bool cameraPreviewOpen: false
+    property string cameraPreviewDeviceId: ""
+    property bool cameraPreviewActive: false
+    property var cameraPreviewHandle: null
+
     signal closeRequested()
+
+    function ensureCameraPreviewDeviceSelected() {
+        if ( !appSupervisor || !appSupervisor.deviceCatalogue ) {
+            return
+        }
+
+        const cameras = appSupervisor.deviceCatalogue.cameras
+        if ( !cameras || cameras.length <= 0 ) {
+            cameraPreviewDeviceId = ""
+            return
+        }
+
+        var found = false
+        for ( var i = 0; i < cameras.length; ++i ) {
+            if ( cameras[i].id === cameraPreviewDeviceId ) {
+                found = true
+            }
+        }
+
+        if ( found ) {
+            return
+        }
+
+        for ( var j = 0; j < cameras.length; ++j ) {
+            if ( cameras[j].isDefault ) {
+                cameraPreviewDeviceId = cameras[j].id
+                return
+            }
+        }
+
+        cameraPreviewDeviceId = cameras[0].id
+    }
+
+    function openCameraPreview() {
+        ensureCameraPreviewDeviceSelected()
+        if ( cameraPreviewDeviceId.length <= 0 ) {
+            return
+        }
+
+        cameraPreviewOpen = true
+        cameraPreviewActive = false
+    }
+
+    function closeCameraPreview() {
+        stopCameraPreview()
+        cameraPreviewOpen = false
+    }
+
+    function startCameraPreview() {
+        if ( !appSupervisor || !appSupervisor.mediaCapture ) {
+            return
+        }
+
+        ensureCameraPreviewDeviceSelected()
+        if ( cameraPreviewDeviceId.length <= 0 ) {
+            return
+        }
+
+        if ( cameraPreviewHandle ) {
+            cameraPreviewHandle.close()
+            cameraPreviewHandle = null
+        }
+
+        cameraPreviewHandle = appSupervisor.mediaCapture.acquireCameraPreviewHandle( cameraPreviewDeviceId, panel )
+        if ( cameraPreviewHandle ) {
+            cameraPreviewHandle.setViewSink( preferencesCameraPreviewVideo.videoSink )
+            cameraPreviewHandle.running = true
+            cameraPreviewActive = true
+        }
+    }
+
+    function stopCameraPreview() {
+        cameraPreviewActive = false
+        if ( cameraPreviewHandle ) {
+            cameraPreviewHandle.running = false
+            cameraPreviewHandle.close()
+            cameraPreviewHandle = null
+        }
+    }
 
     visible: open
     z: 20000
@@ -24,6 +110,10 @@ Control {
     onOpenChanged: {
         if ( open && appSupervisor && appSupervisor.deviceCatalogue ) {
             appSupervisor.deviceCatalogue.refresh()
+        }
+
+        if ( !open ) {
+            closeCameraPreview()
         }
 
         if ( open && appSupervisor && appSupervisor.fontFamilies ) {
@@ -422,7 +512,7 @@ Control {
                     VcPanel {
                         width: parent.width
                         theme: root.theme
-                        accentRole: "primary"
+                        accentRole: "none"
 
                         ColumnLayout {
                             width: parent.width
@@ -731,12 +821,13 @@ Control {
                                 spacing: ( root.theme ? root.theme.spaceTight : 12 )
 
                             Repeater {
+                                // Sorted alphabetically by section title.
                                 model: [
                                     {
-                                        title: "Screens",
-                                        items: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.screens : [] ),
-                                        detailKey: "availableGeometry",
-                                        emptyText: "No screens detected."
+                                        title: "Audio outputs",
+                                        items: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.audioOutputs : [] ),
+                                        defaultSuffix: true,
+                                        emptyText: "No audio outputs detected."
                                     },
                                     {
                                         title: "Cameras",
@@ -751,10 +842,10 @@ Control {
                                         emptyText: "No microphones detected."
                                     },
                                     {
-                                        title: "Audio outputs",
-                                        items: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.audioOutputs : [] ),
-                                        defaultSuffix: true,
-                                        emptyText: "No audio outputs detected."
+                                        title: "Screens",
+                                        items: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.screens : [] ),
+                                        detailKey: "availableGeometry",
+                                        emptyText: "No screens detected."
                                     },
                                     {
                                         title: "Windows",
@@ -768,17 +859,23 @@ Control {
                                     id: deviceSectionCard
                                     width: parent.width
                                     theme: root.theme
-                                    accentRole: ( index === 0 ? "secondary" : "tertiary" )
+                                    accentRole: "none"
                                     property var sectionData: modelData
 
                                     ColumnLayout {
                                         width: parent.width
                                         spacing: ( root.theme ? root.theme.spaceCompact : 8 )
 
-                                        Label {
-                                            text: deviceSectionCard.sectionData.title
-                                            font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
-                                            color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                        RowLayout {
+                                            Layout.fillWidth: true
+
+                                            Label {
+                                                text: deviceSectionCard.sectionData.title
+                                                font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
+                                                color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
                                         }
 
                                         Label {
@@ -789,32 +886,103 @@ Control {
                                             color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
                                         }
 
-                                        Repeater {
-                                            model: deviceSectionCard.sectionData.items
+                                        Rectangle {
+                                            id: deviceSectionListFrame
+                                            Layout.fillWidth: true
+                                            radius: 6
+                                            color: ( root.theme ? root.theme.panelInsetColour : Qt.rgba( root.pal.text.r, root.pal.text.g, root.pal.text.b, 0.04 ) )
+                                            border.color: ( root.theme ? root.theme.frameInnerColour : root.pal.midlight )
+                                            border.width: 1
+                                            clip: true
 
-                                            delegate: Label {
-                                                Layout.fillWidth: true
-                                                wrapMode: Text.Wrap
-                                                color: ( root.theme ? root.theme.textColour : root.pal.text )
-                                                text: {
-                                                    var out = modelData.name
-                                                    if ( deviceSectionCard.sectionData.defaultSuffix && modelData.isDefault ) {
-                                                        out += " (default)"
+                                            readonly property int listPadding: ( root.theme ? root.theme.spaceCompact : 8 )
+                                            implicitHeight: ( sectionList.implicitHeight + ( deviceSectionListFrame.listPadding * 2 ) )
+
+                                            Column {
+                                                id: sectionList
+                                                anchors.fill: parent
+                                                anchors.margins: deviceSectionListFrame.listPadding
+                                                spacing: ( root.theme ? root.theme.spaceNudge : 6 )
+
+                                                Repeater {
+                                                    model: deviceSectionCard.sectionData.items
+
+                                                    delegate: Rectangle {
+                                                        id: deviceRow
+                                                        width: sectionList.width
+                                                        radius: 6
+
+                                                        readonly property bool isCameraRow: ( deviceSectionCard.sectionData.title === "Cameras" )
+                                                        property bool testSkipActivate: true
+
+                                                        objectName: isCameraRow
+                                                            ? ( "preferencesCameraRow_" + modelData.id )
+                                                            : ""
+
+                                                        color: mouseArea.containsMouse && mouseArea.enabled
+                                                            ? ( root.theme ? root.theme.panelColour : Qt.rgba( root.pal.text.r, root.pal.text.g, root.pal.text.b, 0.06 ) )
+                                                            : "transparent"
+
+                                                        border.color: mouseArea.containsMouse && mouseArea.enabled
+                                                            ? ( root.theme ? root.theme.frameColour : root.pal.mid )
+                                                            : "transparent"
+                                                        border.width: mouseArea.containsMouse && mouseArea.enabled ? 1 : 0
+
+                                                        implicitHeight: Math.max( nameLabel.implicitHeight + 12,
+                                                            ( root.theme ? root.theme.compactControlHeight - 4 : 30 ) )
+
+                                                        RowLayout {
+                                                            anchors.fill: parent
+                                                            anchors.leftMargin: 8
+                                                            anchors.rightMargin: 8
+                                                            anchors.topMargin: 6
+                                                            anchors.bottomMargin: 6
+                                                            spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                                            Label {
+                                                                id: nameLabel
+                                                                Layout.fillWidth: true
+                                                                wrapMode: Text.Wrap
+                                                                color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                                                text: {
+                                                                    var out = modelData.name
+                                                                    if ( deviceSectionCard.sectionData.defaultSuffix && modelData.isDefault ) {
+                                                                        out += " (default)"
+                                                                    }
+                                                                    if ( deviceSectionCard.sectionData.detailKey && modelData[deviceSectionCard.sectionData.detailKey] ) {
+                                                                        out += "  " + modelData[deviceSectionCard.sectionData.detailKey]
+                                                                    }
+                                                                    return out
+                                                                }
+                                                            }
+                                                        }
+
+                                                        MouseArea {
+                                                            id: mouseArea
+                                                            anchors.fill: parent
+                                                            enabled: deviceRow.isCameraRow
+                                                            hoverEnabled: true
+                                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+                                                            onClicked: {
+                                                                root.cameraPreviewDeviceId = modelData.id
+                                                                root.openCameraPreview()
+                                                            }
+                                                        }
                                                     }
-                                                    if ( deviceSectionCard.sectionData.detailKey && modelData[deviceSectionCard.sectionData.detailKey] ) {
-                                                        out += "  " + modelData[deviceSectionCard.sectionData.detailKey]
-                                                    }
-                                                    return out
+                                                }
+
+                                                Label {
+                                                    visible: deviceSectionCard.sectionData.items.length === 0
+                                                    width: sectionList.width
+                                                    wrapMode: Text.Wrap
+                                                    text: deviceSectionCard.sectionData.emptyText
+                                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
                                                 }
                                             }
                                         }
 
-                                        Label {
-                                            visible: deviceSectionCard.sectionData.items.length === 0
-                                            text: deviceSectionCard.sectionData.emptyText
-                                            wrapMode: Text.Wrap
-                                            color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
-                                        }
+                                        // Empty text is rendered inside the list frame.
                                     }
                                 }
                             }
@@ -850,8 +1018,12 @@ Control {
         id: panel
         objectName: "preferencesPanel"
         anchors.centerIn: parent
-        width: Math.min( parent.width * 0.92, 820 )
-        height: Math.min( parent.height * 0.9, 620 )
+        width: root.cameraPreviewOpen
+            ? Math.min( parent.width * 0.98, ( root.theme && root.theme.macroPx ? root.theme.macroPx( 1280 ) : 1280 ) )
+            : Math.min( parent.width * 0.92, 820 )
+        height: root.cameraPreviewOpen
+            ? Math.min( parent.height * 0.96, ( root.theme && root.theme.macroPx ? root.theme.macroPx( 900 ) : 900 ) )
+            : Math.min( parent.height * 0.9, 620 )
         theme: root.theme
         accentRole: "secondary"
 
@@ -862,8 +1034,19 @@ Control {
             RowLayout {
                 Layout.fillWidth: true
 
+                VcButton {
+                    visible: root.cameraPreviewOpen
+                    objectName: "preferencesCameraPreviewBackButton"
+                    theme: root.theme
+                    tone: "secondary"
+                    compact: true
+                    text: "Back"
+
+                    onClicked: root.closeCameraPreview()
+                }
+
                 Label {
-                    text: "Preferences"
+                    text: ( root.cameraPreviewOpen ? "Camera preview" : "Preferences" )
                     font.pixelSize: ( root.theme ? root.theme.fontHeadingPx : 18 )
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -881,6 +1064,7 @@ Control {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: ( root.theme ? root.theme.spaceTight : 12 )
+                visible: !root.cameraPreviewOpen
 
                 VcPanel {
                     Layout.preferredWidth: ( root.theme && root.theme.macroPx ? root.theme.macroPx( 220 ) : 220 )
@@ -898,6 +1082,7 @@ Control {
                     }
 
                     ListView {
+                        id: categoryList
                         objectName: "preferencesCategoryList"
                         anchors.fill: parent
                         clip: true
@@ -905,9 +1090,20 @@ Control {
                         model: categoryModel
                         currentIndex: root.currentCategoryIndex
 
+                        ScrollBar.vertical: VcScrollBar {
+                            id: categoryScrollBar
+                            objectName: "preferencesCategoryScrollBar"
+                            theme: root.theme
+                            policy: ScrollBar.AsNeeded
+                            orientation: Qt.Vertical
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                        }
+
                         delegate: Rectangle {
                             objectName: model.objectName
-                            width: ListView.view.width
+                            width: categoryList.width - ( categoryScrollBar.visible ? ( categoryScrollBar.width + 6 ) : 0 )
                             height: ( root.theme ? root.theme.controlHeight : 42 )
                             radius: ( root.theme ? root.theme.controlRadius : 10 )
                             color: ListView.isCurrentItem
@@ -939,6 +1135,174 @@ Control {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     sourceComponent: ( root.currentCategoryIndex === 1 ? devicesPaneComponent : generalPaneComponent )
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.cameraPreviewOpen
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: ( root.theme ? root.theme.panelRadius : 8 )
+                    color: ( root.theme ? root.theme.panelInsetColour : Qt.rgba( root.pal.text.r, root.pal.text.g, root.pal.text.b, 0.05 ) )
+                    border.color: ( root.theme ? root.theme.frameInnerColour : root.pal.midlight )
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: ( root.theme ? root.theme.spaceCompact : 10 )
+                        spacing: ( root.theme ? root.theme.spaceCompact : 10 )
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                            Label {
+                                text: "Camera"
+                                color: ( root.theme ? root.theme.textColour : root.pal.text )
+                            }
+
+                            VcComboBox {
+                                id: preferencesCameraPreviewCombo
+                                objectName: "preferencesCameraPreviewCombo"
+                                theme: root.theme
+                                Layout.fillWidth: true
+                                enabled: ( appSupervisor && appSupervisor.deviceCatalogue && appSupervisor.deviceCatalogue.cameras.length > 0 )
+                                model: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.cameras : [] )
+                                textRole: "name"
+
+                                function indexForDeviceId( id ) {
+                                    if ( !model || model.length <= 0 ) {
+                                        return -1
+                                    }
+                                    for ( var i = 0; i < model.length; ++i ) {
+                                        if ( model[i].id === id ) {
+                                            return i
+                                        }
+                                    }
+                                    return -1
+                                }
+
+                                currentIndex: enabled ? indexForDeviceId( root.cameraPreviewDeviceId ) : -1
+
+                                onActivated: function( index ) {
+                                    if ( index >= 0 && index < model.length ) {
+                                        root.cameraPreviewDeviceId = model[index].id
+                                    }
+
+                                    if ( root.cameraPreviewActive ) {
+                                        root.stopCameraPreview()
+                                    }
+                                }
+                            }
+
+                            VcButton {
+                                id: preferencesCameraPreviewToggleButton
+                                objectName: "preferencesCameraPreviewToggleButton"
+                                theme: root.theme
+                                tone: ( root.cameraPreviewActive ? "secondary" : "primary" )
+                                text: ( root.cameraPreviewActive ? "Stop preview" : "Start preview" )
+                                enabled: ( appSupervisor && appSupervisor.deviceCatalogue && appSupervisor.deviceCatalogue.cameras.length > 0 )
+                                hoverEnabled: true
+                                property bool testSkipActivate: true
+
+                                onClicked: {
+                                    if ( root.cameraPreviewActive ) {
+                                        root.stopCameraPreview()
+                                    } else {
+                                        root.startCameraPreview()
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: preferencesCameraPreviewFrame
+                            objectName: "preferencesCameraPreviewFrame"
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: ( root.theme ? root.theme.panelRadius : 8 )
+                            color: Qt.rgba( root.pal.shadow.r, root.pal.shadow.g, root.pal.shadow.b, 0.08 )
+                            border.color: ( root.theme ? root.theme.frameInnerColour : root.pal.midlight )
+                            border.width: 1
+
+                            VideoOutput {
+                                id: preferencesCameraPreviewVideo
+                                objectName: "preferencesCameraPreviewVideo"
+                                anchors.fill: parent
+                                fillMode: VideoOutput.PreserveAspectFit
+                                visible: ( root.cameraPreviewHandle !== null )
+                            }
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: {
+                                    if ( !appSupervisor || !appSupervisor.deviceCatalogue || appSupervisor.deviceCatalogue.cameras.length <= 0 ) {
+                                        return "No camera devices detected."
+                                    }
+                                    if ( !root.cameraPreviewActive ) {
+                                        return "Preview is stopped."
+                                    }
+                                    if ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) {
+                                        return root.cameraPreviewHandle.errorText
+                                    }
+                                    return "Starting camera..."
+                                }
+                                visible: ( root.cameraPreviewHandle === null )
+                                color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                            }
+                        }
+
+                        VcPanel {
+                            id: preferencesCameraPreviewDetailsPanel
+                            objectName: "preferencesCameraPreviewDetailsPanel"
+                            Layout.fillWidth: true
+                            theme: root.theme
+                            accentRole: "tertiary"
+
+                            ColumnLayout {
+                                id: preferencesCameraDetailsLayout
+                                width: parent.width
+                                spacing: 6
+
+                                Label {
+                                    text: "Details"
+                                    font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
+                                    color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                }
+
+                                readonly property string vcCameraOriginText: {
+                                    if ( !appSupervisor || !appSupervisor.deviceCatalogue || !appSupervisor.deviceCatalogue.cameras ) {
+                                        return "Origin: (unknown camera)"
+                                    }
+                                    const cameras = appSupervisor.deviceCatalogue.cameras
+                                    if ( cameras.length <= 0 ) {
+                                        return "Origin: (no camera detected)"
+                                    }
+                                    for ( var i = 0; i < cameras.length; ++i ) {
+                                        if ( cameras[i].id === root.cameraPreviewDeviceId ) {
+                                            return "Origin: " + cameras[i].name
+                                        }
+                                    }
+                                    return "Origin: (unknown camera)"
+                                }
+
+                                Label {
+                                    text: preferencesCameraDetailsLayout.vcCameraOriginText
+                                    wrapMode: Text.Wrap
+                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                }
+
+                                Label {
+                                    text: "Owner: This device"
+                                    wrapMode: Text.Wrap
+                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

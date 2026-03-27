@@ -1,4 +1,4 @@
-#include "modules/app/devices/localdevicecatalogue.h"
+#include "modules/devices/catalogue/localdevicecatalogue.h"
 
 #include <QByteArray>
 #include <QCoreApplication>

@@ -1,0 +1,27 @@
+= QtCameraBackend
+
+== Description
+
+I am the Qt Multimedia camera backend.
+I provide a `CameraStreamBackend` implementation backed by Qt Multimedia (`QCamera` + `QMediaCaptureSession`).
+
+I collaborate with `MediaCapture`, which uses me as the default camera backend.
+I do not provide synthetic frames and I do not enumerate devices beyond resolving ids into `QCameraDevice` objects.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by `MediaCapture`.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `QString descriptionForId( const QString &deviceId ) const` resolves a device id into a description.
+- `std::unique_ptr<CameraStreamBackend> createStream( const QString &deviceId, QObject *parent ) const` creates a stream or returns null.
+
+Errors:
+- If the device id cannot be resolved, stream creation returns null.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtMultimedia).

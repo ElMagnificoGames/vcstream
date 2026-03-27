@@ -1,0 +1,52 @@
+= MediaCapture
+
+== Description
+
+I am the local media capture controller.
+I start and stop local camera capture and provide fan-out of captured video frames to multiple UI and pipeline consumers.
+
+I collaborate with UI code (QML) that renders previews, and with higher-level orchestration (`AppSupervisor`) that owns my lifetime.
+I do not enumerate devices (that is `LocalDeviceCatalogue`).
+I do not publish to the network, I do not implement room/session policy, and I do not decide layout.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by `AppSupervisor` and exposed to QML.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `QObject *acquireCameraPreviewHandle( const QString &deviceId, QObject *owner )` returns a handle that can render a camera's frames.
+
+Arguments:
+- `deviceId` is the hex-encoded camera id string from `LocalDeviceCatalogue.cameras[*].id`.
+- `owner` is the QObject parent for the returned handle; it controls destruction.
+
+Ownership:
+- The returned handle is a QObject child of `owner`.
+- The handle does not own the view sink; callers attach a `VideoOutput.videoSink`.
+
+Lifetime:
+- When the handle is destroyed (or `close()` is called), it releases its view sink.
+- Capture starts when at least one handle requests `running = true` for a given device id.
+- Capture stops immediately when no handles remain running for that device id.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+- Notes: Intended for UI-thread use; frame fan-out occurs on the same thread.
+
+Errors:
+- Missing/unavailable devices are reported via `CameraPreviewHandle.errorText`.
+
+== Implementation details
+
+- One capture pipeline exists per camera device id.
+- Each pipeline is implemented by a backend stream (`CameraStreamBackend`).
+- The default backend uses Qt Multimedia (`QCamera` + `QMediaCaptureSession` + `QVideoSink`).
+- Alternative backends (for example `NullCameraBackend`) can provide deterministic synthetic frames.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore, QtGui, QtMultimedia).

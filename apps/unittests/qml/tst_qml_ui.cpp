@@ -130,6 +130,28 @@ QQuickItem *findItemByObjectNameRecursive( QQuickItem *rootItem, const QString &
     return out;
 }
 
+QQuickItem *findItemByObjectNamePrefixRecursive( QQuickItem *rootItem, const QString &prefix )
+{
+    QQuickItem *out;
+
+    out = nullptr;
+
+    if ( rootItem != nullptr ) {
+        if ( rootItem->objectName().startsWith( prefix ) ) {
+            out = rootItem;
+        } else {
+            const QList<QQuickItem *> children = rootItem->childItems();
+            for ( QQuickItem *child : children ) {
+                if ( out == nullptr ) {
+                    out = findItemByObjectNamePrefixRecursive( child, prefix );
+                }
+            }
+        }
+    }
+
+    return out;
+}
+
 void clickItemCenter( QQuickWindow &window, QQuickItem *item )
 {
     const QPointF scenePoint = item->mapToScene( QPointF( item->width() / 2.0, item->height() / 2.0 ) );
@@ -1092,6 +1114,153 @@ void collectItemsDepthFirst( QQuickItem *root, QVector<QQuickItem *> &out )
     const QList<QQuickItem *> children = root->childItems();
     for ( QQuickItem *child : children ) {
         collectItemsDepthFirst( child, out );
+    }
+}
+
+bool objectHasProperty( QObject *obj, const char *name )
+{
+    if ( obj == nullptr ) {
+        return false;
+    }
+
+    return obj->metaObject()->indexOfProperty( name ) >= 0;
+}
+
+QQuickItem *findScrollBarForOrientation( QQuickItem *root, int orientationValue )
+{
+    if ( root == nullptr ) {
+        return nullptr;
+    }
+
+    QVector<QQuickItem *> all;
+    collectItemsDepthFirst( root, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+
+        const QString className = QString::fromLatin1( item->metaObject()->className() );
+        if ( !className.contains( QStringLiteral( "ScrollBar" ), Qt::CaseSensitive ) ) {
+            continue;
+        }
+
+        if ( !objectHasProperty( item, "orientation" ) ) {
+            continue;
+        }
+
+        if ( item->property( "orientation" ).toInt() == orientationValue ) {
+            return item;
+        }
+    }
+
+    return nullptr;
+}
+
+void verifyOverflowHasVisibleScrollBar( QQuickItem *host, QQuickItem *content, const char *contextLabel )
+{
+    QVERIFY2( host != nullptr, contextLabel );
+    QVERIFY2( content != nullptr, contextLabel );
+
+    if ( !host->isVisible() || host->width() < 6.0 || host->height() < 6.0 ) {
+        return;
+    }
+    if ( !content->isVisible() || content->width() < 6.0 || content->height() < 6.0 ) {
+        return;
+    }
+
+    const bool canY = objectHasProperty( content, "contentHeight" );
+    const bool canX = objectHasProperty( content, "contentWidth" );
+
+    const qreal viewH = content->height();
+    const qreal viewW = content->width();
+
+    const qreal contentH = canY ? content->property( "contentHeight" ).toReal() : 0.0;
+    const qreal contentW = canX ? content->property( "contentWidth" ).toReal() : 0.0;
+
+    const bool overflowY = canY && ( contentH > viewH + 1.0 );
+    const bool overflowX = canX && ( contentW > viewW + 1.0 );
+
+    if ( overflowY ) {
+        QQuickItem *bar = findScrollBarForOrientation( host, static_cast<int>( Qt::Vertical ) );
+        if ( bar == nullptr ) {
+            const QString msg = QStringLiteral( "%1: missing vertical scrollbar" ).arg( QString::fromLatin1( contextLabel ) );
+            QFAIL( qPrintable( msg ) );
+        }
+
+        if ( objectHasProperty( bar, "policy" ) ) {
+            const int policy = bar->property( "policy" ).toInt();
+            QVERIFY2( policy != static_cast<int>( Qt::ScrollBarAlwaysOff ), "Scrollbar policy is AlwaysOff on overflowing content" );
+        }
+
+        QTRY_VERIFY_WITH_TIMEOUT( bar->isVisible(), 1000 );
+    }
+
+    if ( overflowX ) {
+        QQuickItem *bar = findScrollBarForOrientation( host, static_cast<int>( Qt::Horizontal ) );
+        if ( bar == nullptr ) {
+            const QString msg = QStringLiteral( "%1: missing horizontal scrollbar" ).arg( QString::fromLatin1( contextLabel ) );
+            QFAIL( qPrintable( msg ) );
+        }
+
+        if ( objectHasProperty( bar, "policy" ) ) {
+            const int policy = bar->property( "policy" ).toInt();
+            QVERIFY2( policy != static_cast<int>( Qt::ScrollBarAlwaysOff ), "Scrollbar policy is AlwaysOff on overflowing content" );
+        }
+
+        QTRY_VERIFY_WITH_TIMEOUT( bar->isVisible(), 1000 );
+    }
+}
+
+void verifyAllOverflowingScrollAreasExposeScrollBars( QQuickItem *rootItem, const char *step )
+{
+    QVector<QQuickItem *> all;
+    collectItemsDepthFirst( rootItem, all );
+
+    for ( QQuickItem *item : all ) {
+        if ( item == nullptr ) {
+            continue;
+        }
+        if ( !isFromProjectQml( item ) ) {
+            continue;
+        }
+        if ( !item->isVisible() ) {
+            continue;
+        }
+        if ( item->width() < 6.0 || item->height() < 6.0 ) {
+            continue;
+        }
+
+        // ScrollView: check its contentItem overflow and require bars on the view.
+        if ( objectHasProperty( item, "contentItem" ) ) {
+            QObject *contentObj = item->property( "contentItem" ).value<QObject *>();
+            QQuickItem *content = qobject_cast<QQuickItem *>( contentObj );
+            if ( content != nullptr && objectHasProperty( content, "contentHeight" ) ) {
+                const QString label = QStringLiteral( "%1 scrollview=%2" )
+                                          .arg( QString::fromLatin1( step ) )
+                                          .arg( stableKeyForItem( item ) );
+                verifyOverflowHasVisibleScrollBar( item, content, qPrintable( label ) );
+            }
+        }
+
+        // Generic flickables (ListView et al.): only enforce when they are not the ScrollView content item.
+        if ( objectHasProperty( item, "contentHeight" ) && objectHasProperty( item, "contentY" ) ) {
+            bool isScrollViewContent = false;
+            QObject *p = item->parent();
+            if ( p != nullptr && objectHasProperty( p, "contentItem" ) ) {
+                QObject *contentObj = p->property( "contentItem" ).value<QObject *>();
+                if ( contentObj == item ) {
+                    isScrollViewContent = true;
+                }
+            }
+
+            if ( !isScrollViewContent ) {
+                const QString label = QStringLiteral( "%1 flickable=%2" )
+                                          .arg( QString::fromLatin1( step ) )
+                                          .arg( stableKeyForItem( item ) );
+                verifyOverflowHasVisibleScrollBar( item, item, qPrintable( label ) );
+            }
+        }
     }
 }
 
@@ -2188,22 +2357,47 @@ void tst_QmlUi::text_noOverlapsInKeyFlows_ignoringOverlays()
 
     verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-shell" );
 
+    verifyAllOverflowingScrollAreasExposeScrollBars( rootItem, "textflow-shell" );
+
     // Open the source inspector (modal overlay) and verify text overlaps within layers.
+    // This also verifies the Sources list is actually visible (regression gate).
     {
-        QObject *shellPage = rootObject->findChild<QObject *>( QStringLiteral( "shellPage" ) );
-        QVERIFY2( shellPage != nullptr, "shellPage" );
+        QQuickItem *cameraRow = findItemByObjectNamePrefixRecursive( rootItem, QStringLiteral( "sourceRow_camera_" ) );
+        QVERIFY2( cameraRow != nullptr, "sourceRow_camera_*" );
+        QVERIFY2( cameraRow->property( "visible" ).toBool(), "sourceRow_camera_* must be visible" );
+        QVERIFY2( cameraRow->width() >= 10.0, "sourceRow_camera_* must have width" );
+        QVERIFY2( cameraRow->height() >= 10.0, "sourceRow_camera_* must have height" );
 
-        shellPage->setProperty( "selectedSourceIndex", 0 );
-        shellPage->setProperty( "selectedSourceName", QStringLiteral( "Camera" ) );
-        shellPage->setProperty( "selectedSourceExportEnabled", false );
-        shellPage->setProperty( "sourceInspectorOpen", true );
+        // Open via properties rather than a click; the Sources model can rebuild
+        // asynchronously whilst device enumeration settles.
+        {
+            QQuickItem *shellPage = findItemByObjectNameRecursive( rootItem, QStringLiteral( "shellPage" ) );
+            QVERIFY2( shellPage != nullptr, "shellPage" );
 
-        QCoreApplication::processEvents();
-        QTest::qWait( 80 );
+            shellPage->setProperty( "selectedSourceKind", QStringLiteral( "camera" ) );
+            shellPage->setProperty( "selectedSourceTitle", QStringLiteral( "Camera" ) );
+            shellPage->setProperty( "selectedSourceDeviceId", QString() );
+            shellPage->setProperty( "selectedSourceExportEnabled", false );
+            shellPage->setProperty( "sourceInspectorOpen", true );
+        }
+
+        QTest::qWait( 120 );
 
         QQuickItem *inspectorOverlay = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorOverlay" ) );
         QVERIFY2( inspectorOverlay != nullptr, "sourceInspectorOverlay" );
         QTRY_VERIFY_WITH_TIMEOUT( inspectorOverlay->property( "visible" ).toBool(), 1000 );
+
+        // Task 3.2: Camera source inspector includes a local preview control surface.
+        // The smoke test does not start the camera (hardware/permissions), but it
+        // must be present and stable.
+        {
+            QQuickItem *cameraCombo = findItemByObjectNameRecursive( rootItem, QStringLiteral( "cameraPreviewCombo" ) );
+            QVERIFY2( cameraCombo != nullptr, "cameraPreviewCombo" );
+
+            QQuickItem *cameraToggle = findItemByObjectNameRecursive( rootItem, QStringLiteral( "cameraPreviewToggleButton" ) );
+            QVERIFY2( cameraToggle != nullptr, "cameraPreviewToggleButton" );
+            QVERIFY2( cameraToggle->property( "testSkipActivate" ).toBool(), "cameraPreviewToggleButton must be testSkipActivate" );
+        }
 
         verifyNoVisibleTextOverlapsIgnoringOverlays( rootItem, "textflow-source-inspector" );
 

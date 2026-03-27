@@ -1,0 +1,45 @@
+= CameraPreviewHandle
+
+== Description
+
+I am a camera preview handle.
+I represent a view's attachment to a single camera device stream managed by `MediaCapture`.
+
+I collaborate with `MediaCapture` which owns the per-device capture pipelines.
+I do not own a camera device, I do not start capture unless asked, and I do not create duplicate capture streams.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: created by `MediaCapture` as a QObject child of a caller-provided owner.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `Q_INVOKABLE void setViewSink( QVideoSink *sink )` attaches/detaches a view sink.
+
+  Arguments:
+  - `sink` must be the `VideoOutput.videoSink` provided by QML, or null to detach.
+
+  Lifetime:
+  - The sink is not owned by me. The caller must ensure it outlives this handle or detach it.
+
+- `bool running` starts/stops capture for this handle.
+
+  Notes:
+  - Capture is reference-counted per device id by `MediaCapture`.
+  - Setting `running` on multiple handles for the same device id still results in one opened device.
+
+- `Q_INVOKABLE void close()` stops and detaches and then schedules destruction.
+
+Errors:
+- `errorText` describes why capture could not start (for example, missing device).
+
+== Implementation details
+
+- The handle is a thin adaptor that delegates stream management to `MediaCapture`.
+- It exists so QML can request capture and supply a `QVideoSink` without trying to assign to read-only `VideoOutput.videoSink`.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.

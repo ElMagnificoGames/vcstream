@@ -33,6 +33,7 @@ State model:
 
 - `QObject *preferences() const` returns the application preferences object.
 - `QObject *deviceCatalogue() const` returns the local device catalogue object.
+- `QObject *mediaCapture() const` returns the local media capture service.
 - `QObject *fontPreviewSafetyCache() const` returns the font preview safety cache.
 
   Ownership:

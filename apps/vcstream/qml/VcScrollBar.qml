@@ -31,7 +31,9 @@ ScrollBar {
     readonly property bool vcCanScroll: ( vcSaneSize < 0.999 )
 
     // Avoid a 1-frame "dot" when geometry is not yet settled.
-    readonly property bool vcGeometryReady: ( control.width >= 8 ) && ( control.height >= 60 )
+    // Some legitimate scroll regions are short (for example, compact lists), so
+    // keep the threshold low.
+    readonly property bool vcGeometryReady: ( control.width >= 8 ) && ( control.height >= 20 )
     visible: vcGeometryReady && ( control.policy !== ScrollBar.AlwaysOff ) && vcCanScroll
     opacity: 1.0
 

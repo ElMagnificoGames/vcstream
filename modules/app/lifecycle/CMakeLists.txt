@@ -8,7 +8,8 @@ target_link_libraries( vcstream_app_lifecycle PRIVATE
     Qt6::Gui
     vcstream_warnings
     vcstream_app_settings
-    vcstream_app_devices
+    vcstream_devices_catalogue
+    vcstream_devices_capture
 )
 
 target_link_libraries( vcstream_app_lifecycle PUBLIC

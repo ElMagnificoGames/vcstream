@@ -31,7 +31,7 @@ ApplicationWindow {
         readonly property int landingPageMinHeight: 420
 
         readonly property int shellLeftPaneMinWidth: 220
-        readonly property int shellCentrePaneMinWidth: 320
+        readonly property int shellCentrePaneMinWidth: 240
         readonly property int shellRightPaneMinWidth: 260
         readonly property int shellPageMinWidth: shellLeftPaneMinWidth + shellCentrePaneMinWidth + shellRightPaneMinWidth
         readonly property int shellPageMinHeight: 540
