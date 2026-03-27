@@ -8,16 +8,16 @@ Date: 2026-03-26
 
 VCStream needs a transport + protocol direction early because it affects:
 
-- the shape of control messages (hello/join/leave/chat/publish/subscribe)
+- the shape of control messages (hello / join / leave / chat / publish / subscribe)
 - how media is carried
 - what encryption is assumed
-- whether NAT traversal/hole punching is still possible later without a rewrite
+- whether NAT traversal / hole punching is still possible later without a rewrite
 
 The project’s stated direction is:
 
 - Encrypt all non-local traffic by default.
 - Keep a practical split between a control area and a media area.
-- Treat NAT traversal/hole punching as a serious medium-term goal.
+- Treat NAT traversal / hole punching as a serious medium-term goal.
 
 This ADR focuses on transport and message framing. It does not fully specify the trust UX (that is a separate ADR), but it does state the basic security building blocks we depend on.
 
@@ -31,7 +31,7 @@ Use DTLS to encrypt and authenticate the UDP traffic.
 
 Why:
 
-- UDP keeps NAT traversal/hole punching on the table.
+- UDP keeps NAT traversal / hole punching on the table.
 - Qt 6 provides DTLS support (via `QDtls`), so we can build this using Qt + C++17 without pulling in a separate QUIC library.
 - UDP avoids TCP head-of-line blocking.
 
@@ -43,13 +43,13 @@ Notes:
 
 Within one UDP+DTLS session, treat control and media as separate channels:
 
-- Control: mostly reliable messages (join/leave, publish/unpublish, subscribe/unsubscribe, errors)
+- Control: mostly reliable messages (join / leave, publish / unpublish, subscribe / unsubscribe, errors)
 - Media: time-sensitive messages where loss is acceptable (late is worse than lost)
 
 Notes:
 
 - UDP is message-oriented. We will carry control and media as discrete datagrams and distinguish them by an explicit message `type`.
-- Because UDP is unreliable, we need a small reliability layer for the control channel (acks/retries for messages that must arrive).
+- Because UDP is unreliable, we need a small reliability layer for the control channel (acks / retries for messages that must arrive).
 
 ### Control message format
 
@@ -74,7 +74,7 @@ We will not rely on a public certificate authority.
 - Each relay host has a stable long-term identity key.
 - The app shows a short “host identity” code derived from that public key.
 - On first connection, the joiner should confirm the host identity matches what the host shares out-of-band.
-- After first trust, the app pins the host identity (TOFU) so future connections can warn/refuse on unexpected identity changes.
+- After first trust, the app pins the host identity (TOFU) so future connections can warn / refuse on unexpected identity changes.
 
 This is part of the trust model, but it affects what the transport must expose (peer identity material that can be fingerprinted and pinned).
 
@@ -112,10 +112,10 @@ Pros:
 
 Cons:
 
-- makes NAT traversal/hole punching materially harder (and pushes the design towards TCP-only assumptions)
+- makes NAT traversal / hole punching materially harder (and pushes the design towards TCP-only assumptions)
 - poor fit for real-time media (head-of-line blocking, late delivery)
 
-Rejected because NAT traversal/hole punching is considered a serious medium-term goal.
+Rejected because NAT traversal / hole punching is considered a serious medium-term goal.
 
 ### A2: QUIC for everything
 
@@ -130,7 +130,7 @@ Cons:
 
 Rejected because this project prioritises a Qt-only implementation path for v1.
 
-### A3: TLS/TCP control + UDP/DTLS media
+### A3: TLS / TCP control + UDP / DTLS media
 
 Pros:
 
@@ -138,7 +138,7 @@ Pros:
 
 Cons:
 
-- If we need NAT traversal/hole punching, a TCP control connection becomes the weak link. If the host/relay is not publicly reachable, the session can fail even if UDP media could be established.
+- If we need NAT traversal / hole punching, a TCP control connection becomes the weak link. If the host / relay is not publicly reachable, the session can fail even if UDP media could be established.
 - Requires building and testing two transport families (TCP+TLS and UDP+DTLS), which increases complexity early.
 
 Rejected because it keeps TCP as a required dependency for the session and increases complexity by splitting transport across two stacks.
@@ -165,16 +165,16 @@ Rejected as not realistic for this project.
 ### Engineering risks
 
 - Reliable control over UDP must be designed carefully to avoid edge-case state corruption.
-- NAT traversal/hole punching is not guaranteed to work on every network; we need clear diagnostics and fallbacks.
+- NAT traversal / hole punching is not guaranteed to work on every network; we need clear diagnostics and fallbacks.
 - Debuggability needs deliberate investment (wire logs, connection stats, message tracing) to avoid a black box.
 
 ### Design constraints for later work
 
-- Control message schemas should be designed for forward/backward compatibility (explicit fields, conservative defaults, ignore unknown fields).
+- Control message schemas should be designed for forward / backward compatibility (explicit fields, conservative defaults, ignore unknown fields).
 - Media units should be self-describing enough to be carried over UDP datagrams without relying on ordered delivery.
 
 ## Follow-ups
 
 - ADR: trust model and how clients trust a relay host (fingerprints, TOFU, or a PKI-like approach).
-- ADR/note: rendezvous service scope and how it assists NAT traversal (STUN-like discovery, hole punching coordination; TURN-like relaying is out of scope unless explicitly added).
+- ADR / note: rendezvous service scope and how it assists NAT traversal (STUN-like discovery, hole punching coordination; TURN-like relaying is out of scope unless explicitly added).
 - Specify the control reliability layer (what is reliable vs not, retry rules, id ranges, and how to recover after gaps).

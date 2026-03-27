@@ -730,6 +730,37 @@ Cleanup
 - ADR location:
   - `docs/adr/0003-rendezvous-and-nat-traversal-scope.md`
 
+## Task 2.4 — Define a reliable control layer
+
+### What
+
+- Added an ADR describing a small reliable-control layer for UDP + DTLS control messages.
+
+### Why
+
+- UDP does not guarantee delivery; without a defined reliability layer, control messages would behave inconsistently under loss.
+- Control reliability must be specified separately from media behaviour (missing audio / video frames are normal on UDP).
+
+### Acceptance criteria
+
+- ADR written.
+- Reliability and ordering semantics are explicit.
+- User-facing consequences of stalls / unresponsiveness are recorded.
+
+### Decisions
+
+- Reliability mechanism: per-datagram piggybacked acknowledgements using `ack_base` plus a 64-bit forward bitmap (`ack_bits`), with bounded retries.
+- Semantics: at-most-once delivery for reliable control messages; out-of-order delivery is allowed.
+- Saturation handling: cap in-flight reliable messages to the ack window; prioritise retransmitting the missing `ack_base + 1` message when progress stalls.
+- Snapshots: periodic full snapshots are the primary recovery path for control state; snapshot requests are best-effort and never session-fatal.
+- Liveness UX: distinguish `Stalled (media)` from `Unresponsive` (no DTLS-protected traffic), and avoid auto-disconnecting peers by default.
+- Missed chat: host assigns a room-wide `chat_seq`; clients compare `chat_seq_latest` against `last_chat_seq_seen` and insert a system chat line if messages may have been missed; chat is ordered by server `chat_seq` with local pending messages matched by `client_msg_id`.
+
+### Technical notes
+
+- ADR location:
+  - `docs/adr/0004-reliable-control-layer.md`
+
 ## Maintenance — Fix `-Wconversion` build breaks; ensure accent changes repaint ComboBox indicator
 
 ### What

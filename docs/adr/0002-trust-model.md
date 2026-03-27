@@ -6,7 +6,7 @@ Date: 2026-03-26
 
 ## Context
 
-VCStream encrypts non-local traffic by default and intends to support NAT traversal/hole punching.
+VCStream encrypts non-local traffic by default and intends to support NAT traversal / hole punching.
 
 We do not want to depend on a public certificate authority (CA), and we want a trust model that:
 
@@ -41,7 +41,7 @@ The out-of-band check is how the user verifies that the public key they have rec
 The identity code is a human-friendly display form of a cryptographic fingerprint.
 
 - Fingerprint input: the canonical public key bytes for the device identity.
-  - Prefer a stable DER encoding of the public key as used by DTLS peer identity (for example an X.509 SubjectPublicKeyInfo/SPKI encoding).
+  - Prefer a stable DER encoding of the public key as used by DTLS peer identity (for example an X.509 SubjectPublicKeyInfo / SPKI encoding).
   - The exact public key type and canonical encoding are part of the implementation work, but the key requirement is: the same key must always produce the same bytes.
 - Fingerprint function: `SHA-256( "VCStream identity v1" || public_key_bytes )`.
   - The prefix is domain separation so we do not accidentally re-use the hash in some unrelated context.
@@ -152,10 +152,10 @@ Rejected: high risk and high long-term maintenance cost.
   - identity key generation and storage
   - host identity pinning and mismatch handling
   - allowlist storage and lookup
-  - join request queue/UX
+  - join request queue / UX
   - password handling without persistence
 
 ## Follow-ups
 
-- Note/ADR: rendezvous and NAT traversal scope (discovery is not a trust anchor).
+- Note / ADR: rendezvous and NAT traversal scope (discovery is not a trust anchor).
 - Define the exact identity code encoding (length, alphabet) so intentional collisions are impractical and the code is typo-resistant.

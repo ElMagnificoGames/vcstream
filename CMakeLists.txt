@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 3.24 )
 
-project( vcstream VERSION 0.7.6 LANGUAGES CXX )
+project( vcstream VERSION 0.7.7 LANGUAGES CXX )
 
 set( CMAKE_CXX_STANDARD 17 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )

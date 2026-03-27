@@ -45,11 +45,11 @@ It can still materially improve connection success by providing endpoint hints a
 
 NAT traversal answers:
 
-- “Can two devices behind NATs/firewalls establish a usable UDP path without manual port forwarding?”
+- “Can two devices behind NATs / firewalls establish a usable UDP path without manual port forwarding?”
 
 This includes:
 
-- learning external address/port mappings (STUN-like behaviour)
+- learning external address / port mappings (STUN-like behaviour)
 - coordinating hole punching
 - coping with NAT timeouts (keepalives)
 
@@ -60,7 +60,7 @@ Some networks will still be unreachable without a relay-like fallback.
 ### Scope
 
 - Rendezvous is in scope as an optional future extension.
-- NAT traversal/hole punching is a real medium-term goal.
+- NAT traversal / hole punching is a real medium-term goal.
 - We will treat NAT traversal as best-effort. We will not claim “always works”.
 - TURN-like media relaying (a third-party server that forwards traffic when hole punching fails) is out of scope unless explicitly added later.
 
@@ -70,7 +70,7 @@ Some networks will still be unreachable without a relay-like fallback.
 
 - observing and returning the host’s apparent public UDP endpoint (best-effort hint)
 - coordinating join timing so both sides send UDP traffic during the same window
-- exchanging small connection hints/candidates between joiner and host
+- exchanging small connection hints / candidates between joiner and host
 
 This tends to improve success rates, but it still cannot guarantee reachability on all networks.
 
@@ -118,7 +118,7 @@ It also constrains future protocol and implementation work:
 
 ### A1: Discovery-only forever
 
-Rejected: NAT traversal/hole punching is considered a real medium-term goal.
+Rejected: NAT traversal / hole punching is considered a real medium-term goal.
 
 ### A2: Add TURN-like relaying early
 
