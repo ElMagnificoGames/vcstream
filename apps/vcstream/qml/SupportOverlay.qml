@@ -98,7 +98,20 @@ Item {
                     anchors.fill: parent
                     clip: true
                     rightPadding: ( supportScrollBar.width + ( root.theme ? root.theme.spaceTight : 12 ) )
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    bottomPadding: ( supportHScrollBar.visible
+                        ? ( supportHScrollBar.height + ( root.theme ? root.theme.spaceTight : 12 ) )
+                        : 0 )
+
+                    ScrollBar.horizontal: VcScrollBar {
+                        id: supportHScrollBar
+                        objectName: "supportScrollBarH"
+                        theme: root.theme
+                        policy: ScrollBar.AsNeeded
+                        orientation: Qt.Horizontal
+                        width: supportScrollView.width
+                        x: 0
+                        y: supportScrollView.height - height
+                    }
 
                     ScrollBar.vertical: VcScrollBar {
                         id: supportScrollBar

@@ -1,15 +1,16 @@
-#include "modules/app/platform/qtshims.h"
+#include "modules/platform/shim/qtstartupshim.h"
 
 #include <QDir>
 #include <QString>
 
 #include <QtGlobal>
 
-namespace qtshims {
+#if defined( Q_OS_WIN )
+
+namespace qtstartupshim {
 
 void applyBeforeQGuiApplication()
 {
-#if defined( Q_OS_WIN )
     if ( !qEnvironmentVariableIsSet( "QT_QPA_FONTDIR" ) ) {
         QString windir;
         QString fontDir;
@@ -24,7 +25,8 @@ void applyBeforeQGuiApplication()
             qputenv( "QT_QPA_FONTDIR", fontDir.toUtf8() );
         }
     }
-#endif
 }
 
 }
+
+#endif

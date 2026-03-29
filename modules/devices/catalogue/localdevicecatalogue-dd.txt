@@ -17,27 +17,32 @@ State model:
 
 Properties (QML-facing):
 - `QVariantList screens` is a list of `QVariantMap` values. Each map contains at least:
+  - `id` (`QString`) stable identifier for this process run
   - `name` (`QString`)
   - `geometry` (`QRect`)
   - `availableGeometry` (`QRect`)
   - `devicePixelRatio` (`double`)
 
 - `QVariantList cameras` is a list of `QVariantMap` values. Each map contains at least:
-  - `name` (`QString`) user-facing device description
-  - `id` (`QString`) stable identifier string (hex-encoded bytes)
-  - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultVideoInput()`
+   - `name` (`QString`) user-facing device description
+   - `id` (`QString`) stable identifier string (hex-encoded bytes)
+   - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultVideoInput()`
+   - `available` (`bool`) whether this device is currently enumerable
 
 - `QVariantList microphones` is a list of `QVariantMap` values. Each map contains at least:
-  - `name` (`QString`) user-facing device description
-  - `id` (`QString`) stable identifier string (hex-encoded bytes)
-  - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultAudioInput()`
+   - `name` (`QString`) user-facing device description
+   - `id` (`QString`) stable identifier string (hex-encoded bytes)
+   - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultAudioInput()`
+   - `available` (`bool`) whether this device is currently enumerable
 
 - `QVariantList audioOutputs` is a list of `QVariantMap` values. Each map contains at least:
-  - `name` (`QString`) user-facing device description
-  - `id` (`QString`) stable identifier string (hex-encoded bytes)
-  - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultAudioOutput()`
+   - `name` (`QString`) user-facing device description
+   - `id` (`QString`) stable identifier string (hex-encoded bytes)
+   - `isDefault` (`bool`) whether this device equals `QMediaDevices::defaultAudioOutput()`
+   - `available` (`bool`) whether this device is currently enumerable
 
 - `QVariantList windows` is a list of `QVariantMap` values. Each map contains at least:
+  - `id` (`QString`) stable identifier for this process run
   - `name` (`QString`) window description
 
 - `QString windowCaptureStatus` is an explanatory message when window enumeration is unavailable, otherwise an empty string.
@@ -45,9 +50,11 @@ Properties (QML-facing):
  Commands:
  - `void refresh()` re-enumerates all device categories and updates the properties.
 
-   Environment:
-   - If the environment variable `VCSTREAM_DISABLE_MEDIA_ENUM` is set to `1`, `true`, or `yes`, `refresh()` does not enumerate devices.
-     - It clears all device lists and sets `windowCaptureStatus` to "Device enumeration is disabled.".
+     Environment:
+    - If the environment variable `VCSTREAM_DEBUG_FAKE_MEDIA_ENUM` is set to `1`, `true`, or `yes`, the catalogue uses fake device lists.
+       - The fake lists preserve the same QML-facing schema as real enumeration.
+       - The lists update on a short cadence (about every 10ms) to help reproduce UI instability and memory-corruption bugs.
+       - The fake generator uses `VCSTREAM_DEBUG_TEST_SEED` for determinism.
 
 Signals:
 - `screensChanged()` is emitted when `screens` changes.
@@ -55,7 +62,15 @@ Signals:
 - `microphonesChanged()` is emitted when `microphones` changes.
 - `audioOutputsChanged()` is emitted when `audioOutputs` changes.
 - `windowsChanged()` is emitted when `windows` changes.
-- `windowCaptureStatusChanged()` is emitted when `windowCaptureStatus` changes.
+ - `windowCaptureStatusChanged()` is emitted when `windowCaptureStatus` changes.
+ - `cameraDiscoveryStatusChanged()` is emitted when `cameraDiscoveryStatus` changes.
+
+ Properties:
+  - `QString cameraDiscoveryStatus` is a short diagnostic message about camera rescan support, or an empty string.
+
+     Notes:
+     - This property is intended for UI diagnostics. The default UI copy for empty camera lists should remain neutral (for example "No cameras detected.").
+     - When the rescan mechanism is permanently unavailable, this property should be non-empty regardless of whether cameras are currently present.
 
 Thread safety:
 - Thread-safe: No.
@@ -67,10 +82,67 @@ Errors:
 
 == Implementation details
 
-- Screens are sourced from `QGuiApplication::screens()`.
-- Camera and audio devices are sourced from `QMediaDevices`.
-- Capturable windows are sourced from `QWindowCapture` where Qt provides the API; otherwise `windowCaptureStatus` reports the limitation.
-- Device enumeration can be disabled for testing/CI via `VCSTREAM_DISABLE_MEDIA_ENUM`.
+  - Screens are sourced from `QGuiApplication::screens()`.
+  - Camera and audio devices are sourced from `QMediaDevices`.
+  - The catalogue maintains a small in-memory "known devices" list for the current process run.
+    - Purpose: provide consistent UI behaviour when devices disappear and later reappear.
+    - Scope: in-memory only; it resets on application restart.
+    - Behaviour:
+      - Devices currently reported by Qt are listed first.
+      - Within the "currently reported" group, devices are sorted alphabetically by name.
+      - Devices previously seen in this run but not currently reported are appended with `available=false`.
+      - Within the "remembered but missing" group, devices are sorted alphabetically by name.
+      - This avoids UI dead-ends where a device vanishes from the list while a preview/inspector remains open.
+    - Limits:
+      - The remembered list is bounded (to avoid unbounded growth on flaky hardware).
+      - Device identity is based on Qt's device id within the current process; if a device returns with a different id it may appear as a separate entry until the cache evicts old missing entries.
+  - When available, a background video-input rescan loop requests backend-specific camera rescans via `QtMultimediaRescan`.
+    - Motivation: on some Linux setups, virtual cameras (for example OBS + v4l2loopback) may not trigger Qt's normal `/dev` watcher, so `videoInputsChanged` would never fire without a prompt.
+    - Cadence: roughly every 2 seconds.
+    - The rescan itself is best-effort; when the backend detects a change it emits `videoInputsChanged`, and the catalogue refresh wiring updates the QML-facing snapshot.
+  - Capturable windows are sourced from `QWindowCapture` where Qt provides the API; otherwise `windowCaptureStatus` reports the limitation.
+     - When window enumeration is available, windows are sorted alphabetically by name.
+     - Qt does not provide a reliable event-driven notification when the list of capturable windows changes.
+       - To keep the list current, the catalogue polls `QWindowCapture::capturableWindows()` on a simple cadence (about every 2 seconds) when window capture is available.
+        - To avoid UI churn from window title changes:
+          - The catalogue updates the visible Windows list immediately when the set of capturable windows changes (add/remove).
+          - When the set is unchanged but the names differ, the catalogue treats it as "title churn" and defers updating the visible list.
+          - A slower heartbeat (about every 30 seconds) applies pending title changes if any were observed.
+     - Implementation note: this polling and title-churn handling is encapsulated in `WindowCaptureWatcher`.
+
+  Update model and subscriptions:
+  - The catalogue listens for device changes where Qt provides signals, and uses simple timers where Qt does not.
+
+  - Cameras, microphones, and audio outputs:
+    - The catalogue owns a `QMediaDevices` instance.
+    - It connects `QMediaDevices::videoInputsChanged`, `audioInputsChanged`, and `audioOutputsChanged` to `scheduleRefresh()`.
+    - When a change arrives, it does not refresh immediately. It schedules one refresh on the next event-loop turn so bursts of signals collapse into a single update.
+
+  - Screens:
+    - The catalogue connects `QGuiApplication::screenAdded` and `screenRemoved` to `scheduleRefresh()`.
+    - Screen changes therefore follow the same coalesced refresh path as multimedia device changes.
+
+  - Capturable windows:
+    - Qt does not provide a reliable event-driven notification for changes to the capturable window list.
+    - The catalogue polls `QWindowCapture::capturableWindows()` about every 2 seconds to detect add/remove changes.
+    - Window titles can change frequently, so the catalogue defers title-only changes and applies them on a slower cadence (about every 30 seconds).
+
+  - Video input rescan helper:
+    - On some Linux setups (for example OBS + v4l2loopback), Qt may not notice new/changed cameras without prompting.
+    - A timer calls `qtmultimediarescan::requestVideoInputsRescan()` about every 2 seconds.
+    - This call is best-effort. It is meant to cause Qt to emit `QMediaDevices::videoInputsChanged`, which then triggers `scheduleRefresh()`.
+
+  - `scheduleRefresh()`:
+    - In normal mode, `scheduleRefresh()` starts a single-shot timer with interval 0.
+    - In fake mode, `scheduleRefresh()` starts a repeating timer with a short interval (about every 10ms).
+    - The actual work happens in `refresh()`.
+
+  - Fake and headless behaviour:
+    - If there is no `QGuiApplication` (only a `QCoreApplication`), enumeration is treated as unavailable.
+      - `refresh()` clears all device lists and sets a status message.
+    - Fake enumeration can be enabled for debugging/CI via `VCSTREAM_DEBUG_FAKE_MEDIA_ENUM`.
+      - This is intended as a startup-time switch.
+      - Changing it after the catalogue has been constructed is not a supported workflow.
 
 == Requirements
 

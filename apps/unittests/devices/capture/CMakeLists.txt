@@ -12,3 +12,5 @@ target_link_libraries( tst_mediacapture PRIVATE
 )
 
 add_test( NAME tst_mediacapture COMMAND tst_mediacapture )
+
+vcstream_apply_default_test_environment( tst_mediacapture )

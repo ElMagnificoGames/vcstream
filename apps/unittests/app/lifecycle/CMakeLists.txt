@@ -13,3 +13,5 @@ target_link_libraries( tst_appsupervisor PRIVATE
 )
 
 add_test( NAME tst_appsupervisor COMMAND tst_appsupervisor )
+
+vcstream_apply_default_test_environment( tst_appsupervisor )

@@ -41,7 +41,7 @@
 #include <QUrl>
 #include <QtGlobal>
 
-#include "modules/app/platform/qtshims.h"
+#include "modules/platform/shim/qtstartupshim.h"
 
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -58,6 +58,8 @@
 #include "modules/ui/theme/themeiconimageprovider.h"
 
 namespace {
+
+bool objectHasProperty( QObject *obj, const char *name );
 
 QVector<QString> g_messages;
 QtMessageHandler g_previousHandler;
@@ -640,26 +642,55 @@ void verifyScrollBarsAreNotDegenerate( QQuickWindow &window, QQuickItem *rootIte
 
         // If it is visible, it must look like a scroll bar, not a tiny dot.
         const QRectF r = sceneRect( item );
-        if ( r.width() < 8.0 || r.height() < 60.0 ) {
-            const QString message =
-                QStringLiteral( "Degenerate scrollbar geometry at %1: w=%2 h=%3 objectName=%4" )
-                    .arg( QString::fromLatin1( step ) )
-                    .arg( r.width(), 0, 'f', 1 )
-                    .arg( r.height(), 0, 'f', 1 )
-                    .arg( item->objectName() );
-            QFAIL( qPrintable( message ) );
-        }
 
-        // It should be anchored near the right edge of its parent.
-        const QRectF pr = ( item->parentItem() != nullptr ) ? sceneRect( item->parentItem() ) : QRectF();
-        if ( pr.isValid() && r.right() < pr.right() - 6.0 ) {
-            const QString message =
-                QStringLiteral( "Scrollbar not near right edge at %1: x=%2 right=%3 parentRight=%4" )
-                    .arg( QString::fromLatin1( step ) )
-                    .arg( r.left(), 0, 'f', 1 )
-                    .arg( r.right(), 0, 'f', 1 )
-                    .arg( pr.right(), 0, 'f', 1 );
-            QFAIL( qPrintable( message ) );
+        const int orientation = objectHasProperty( item, "orientation" )
+            ? item->property( "orientation" ).toInt()
+            : static_cast<int>( Qt::Vertical );
+
+        if ( orientation == static_cast<int>( Qt::Horizontal ) ) {
+            if ( r.height() < 8.0 || r.width() < 60.0 ) {
+                const QString message =
+                    QStringLiteral( "Degenerate horizontal scrollbar geometry at %1: w=%2 h=%3 objectName=%4" )
+                        .arg( QString::fromLatin1( step ) )
+                        .arg( r.width(), 0, 'f', 1 )
+                        .arg( r.height(), 0, 'f', 1 )
+                        .arg( item->objectName() );
+                QFAIL( qPrintable( message ) );
+            }
+
+            // It should be anchored near the bottom edge of its parent.
+            const QRectF pr = ( item->parentItem() != nullptr ) ? sceneRect( item->parentItem() ) : QRectF();
+            if ( pr.isValid() && r.bottom() < pr.bottom() - 6.0 ) {
+                const QString message =
+                    QStringLiteral( "Horizontal scrollbar not near bottom edge at %1: y=%2 bottom=%3 parentBottom=%4" )
+                        .arg( QString::fromLatin1( step ) )
+                        .arg( r.top(), 0, 'f', 1 )
+                        .arg( r.bottom(), 0, 'f', 1 )
+                        .arg( pr.bottom(), 0, 'f', 1 );
+                QFAIL( qPrintable( message ) );
+            }
+        } else {
+            if ( r.width() < 8.0 || r.height() < 60.0 ) {
+                const QString message =
+                    QStringLiteral( "Degenerate vertical scrollbar geometry at %1: w=%2 h=%3 objectName=%4" )
+                        .arg( QString::fromLatin1( step ) )
+                        .arg( r.width(), 0, 'f', 1 )
+                        .arg( r.height(), 0, 'f', 1 )
+                        .arg( item->objectName() );
+                QFAIL( qPrintable( message ) );
+            }
+
+            // It should be anchored near the right edge of its parent.
+            const QRectF pr = ( item->parentItem() != nullptr ) ? sceneRect( item->parentItem() ) : QRectF();
+            if ( pr.isValid() && r.right() < pr.right() - 6.0 ) {
+                const QString message =
+                    QStringLiteral( "Vertical scrollbar not near right edge at %1: x=%2 right=%3 parentRight=%4" )
+                        .arg( QString::fromLatin1( step ) )
+                        .arg( r.left(), 0, 'f', 1 )
+                        .arg( r.right(), 0, 'f', 1 )
+                        .arg( pr.right(), 0, 'f', 1 );
+                QFAIL( qPrintable( message ) );
+            }
         }
     }
 }
@@ -1183,6 +1214,9 @@ void verifyOverflowHasVisibleScrollBar( QQuickItem *host, QQuickItem *content, c
 
     if ( overflowY ) {
         QQuickItem *bar = findScrollBarForOrientation( host, static_cast<int>( Qt::Vertical ) );
+        if ( bar == nullptr && host->parentItem() != nullptr ) {
+            bar = findScrollBarForOrientation( host->parentItem(), static_cast<int>( Qt::Vertical ) );
+        }
         if ( bar == nullptr ) {
             const QString msg = QStringLiteral( "%1: missing vertical scrollbar" ).arg( QString::fromLatin1( contextLabel ) );
             QFAIL( qPrintable( msg ) );
@@ -1198,6 +1232,9 @@ void verifyOverflowHasVisibleScrollBar( QQuickItem *host, QQuickItem *content, c
 
     if ( overflowX ) {
         QQuickItem *bar = findScrollBarForOrientation( host, static_cast<int>( Qt::Horizontal ) );
+        if ( bar == nullptr && host->parentItem() != nullptr ) {
+            bar = findScrollBarForOrientation( host->parentItem(), static_cast<int>( Qt::Horizontal ) );
+        }
         if ( bar == nullptr ) {
             const QString msg = QStringLiteral( "%1: missing horizontal scrollbar" ).arg( QString::fromLatin1( contextLabel ) );
             QFAIL( qPrintable( msg ) );
@@ -1482,6 +1519,8 @@ private Q_SLOTS:
     void layout_textContrastIsReadableInKeyScreens();
     void preferences_scrollbarAndWheelWork();
     void preferences_wheelOverComboBox_doesNotChangeSelection();
+    void shell_sourcesScrollBars_doNotOverlap();
+    void shell_sourceInspectorTitle_isNotBulleted_andReflectsAvailability();
     void preferences_clickInsidePanel_doesNotClose();
     void landing_popups_openAndCloseWithoutWarnings();
     void app_utilityActions_areConsistentAcrossPages();
@@ -1587,7 +1626,10 @@ void tst_QmlUi::preferences_accentChange_repaintsComboIndicator()
 
 void tst_QmlUi::initTestCase()
 {
-    qputenv( "VCSTREAM_DISABLE_MEDIA_ENUM", "1" );
+    qputenv( "VCSTREAM_DEBUG_FAKE_MEDIA_ENUM", "1" );
+    if ( qgetenv( "VCSTREAM_DEBUG_TEST_SEED" ).isEmpty() ) {
+        qputenv( "VCSTREAM_DEBUG_TEST_SEED", "0x1234" );
+    }
 
     g_previousHandler = qInstallMessageHandler( messageHandler );
 
@@ -1793,12 +1835,16 @@ void tst_QmlUi::preferences_categorySwitchingShowsExpectedPane()
     QTest::qWait( 50 );
 
     QQuickItem *devicesPane = nullptr;
-    QQuickItem *deviceRefreshButton = nullptr;
     QTRY_VERIFY_WITH_TIMEOUT( ( devicesPane = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesDevicesPane" ) ) ) != nullptr, 1000 );
-    QTRY_VERIFY_WITH_TIMEOUT( ( deviceRefreshButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesDeviceRefreshButton" ) ) ) != nullptr, 1000 );
+
+    // Devices should update dynamically; the UI no longer exposes a manual Refresh button.
+    QVERIFY2( findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesDeviceRefreshButton" ) ) == nullptr,
+        "preferencesDeviceRefreshButton should not exist" );
+
+    QQuickItem *devicesScrollView = findItemByObjectNameRecursive( rootItem, QStringLiteral( "preferencesDevicesScrollView" ) );
+    QVERIFY2( devicesScrollView != nullptr, "preferencesDevicesScrollView" );
 
     QVERIFY( devicesPane->property( "visible" ).toBool() );
-    QVERIFY( deviceRefreshButton->property( "visible" ).toBool() );
     failIfAnyWarnings( "preferences-devices-pane-visible" );
     clearMessages();
 }
@@ -2362,11 +2408,14 @@ void tst_QmlUi::text_noOverlapsInKeyFlows_ignoringOverlays()
     // Open the source inspector (modal overlay) and verify text overlaps within layers.
     // This also verifies the Sources list is actually visible (regression gate).
     {
-        QQuickItem *cameraRow = findItemByObjectNamePrefixRecursive( rootItem, QStringLiteral( "sourceRow_camera_" ) );
-        QVERIFY2( cameraRow != nullptr, "sourceRow_camera_*" );
-        QVERIFY2( cameraRow->property( "visible" ).toBool(), "sourceRow_camera_* must be visible" );
-        QVERIFY2( cameraRow->width() >= 10.0, "sourceRow_camera_* must have width" );
-        QVERIFY2( cameraRow->height() >= 10.0, "sourceRow_camera_* must have height" );
+        // Gate: Sources list must be visible and have real geometry.
+        {
+            QQuickItem *sourcesList = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourcesList" ) );
+            QVERIFY2( sourcesList != nullptr, "sourcesList" );
+            QVERIFY2( sourcesList->property( "visible" ).toBool(), "sourcesList must be visible" );
+            QVERIFY2( sourcesList->width() >= 10.0, "sourcesList must have width" );
+            QVERIFY2( sourcesList->height() >= 10.0, "sourcesList must have height" );
+        }
 
         // Open via properties rather than a click; the Sources model can rebuild
         // asynchronously whilst device enumeration settles.
@@ -2514,6 +2563,10 @@ void tst_QmlUi::preferences_scrollbarAndWheelWork()
     QVERIFY2( scrollView != nullptr, "preferencesGeneralScrollView" );
     QVERIFY2( scrollBar != nullptr, "preferencesGeneralScrollBar" );
 
+    // After a window resize, Qt Quick layouts can take a moment to settle.
+    // Ensure the scroll view is on-screen before sending mouse events.
+    QTRY_VERIFY_WITH_TIMEOUT( itemCentreIsInsideWindow( *window, scrollView ), 2000 );
+
     QTRY_VERIFY_WITH_TIMEOUT( scrollBar->isVisible(), 1000 );
     QVERIFY( scrollBar->width() >= 8.0 );
     QVERIFY( scrollBar->height() >= 60.0 );
@@ -2636,6 +2689,151 @@ void tst_QmlUi::preferences_wheelOverComboBox_doesNotChangeSelection()
 
     failIfAnyWarnings( "combo-wheel" );
     clearMessages();
+}
+
+void tst_QmlUi::shell_sourcesScrollBars_doNotOverlap()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+
+    // Make the Sources list likely to overflow vertically.
+    window->resize( 520, 280 );
+    QCoreApplication::processEvents();
+
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "sources-bars-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *joinRoomButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+    clickItemCenter( *window, joinRoomButton );
+    QTest::qWait( 160 );
+    failIfAnyWarnings( "sources-bars-go-shell" );
+    clearMessages();
+
+    QQuickItem *shellPage = findItemByObjectNameRecursive( rootItem, QStringLiteral( "shellPage" ) );
+    QVERIFY2( shellPage != nullptr, "shellPage" );
+
+    // Force horizontal overflow to ensure the horizontal bar is actually needed.
+    shellPage->setProperty( "sourcesContentWidthHint", 2000.0 );
+    QVERIFY2( QMetaObject::invokeMethod( shellPage, "recomputeSourcesScrollNeeds" ), "invoke recomputeSourcesScrollNeeds" );
+    QCoreApplication::processEvents();
+
+    QQuickItem *sourcesV = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourcesScrollBar" ) );
+    QQuickItem *sourcesH = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourcesHScrollBar" ) );
+    QVERIFY2( sourcesV != nullptr, "sourcesScrollBar" );
+    QVERIFY2( sourcesH != nullptr, "sourcesHScrollBar" );
+
+    QTRY_VERIFY_WITH_TIMEOUT( sourcesV->isVisible(), 1500 );
+    QTRY_VERIFY_WITH_TIMEOUT( sourcesH->isVisible(), 1500 );
+
+    const QRectF vR = sceneRect( sourcesV );
+    const QRectF hR = sceneRect( sourcesH );
+
+    const QRectF isect = vR.intersected( hR );
+    QVERIFY2( isect.isEmpty(), "sources scrollbars overlap" );
+}
+
+void tst_QmlUi::shell_sourceInspectorTitle_isNotBulleted_andReflectsAvailability()
+{
+    AppSupervisor supervisor;
+    OklchUtil oklchUtil;
+    QQmlApplicationEngine engine;
+
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        []( const QList<QQmlError> &warnings ) {
+            for ( const QQmlError &e : warnings ) {
+                g_messages.append( e.toString() );
+            }
+        } );
+
+    engine.addImageProvider( QStringLiteral( "vcTheme" ), new AccentImageProvider() );
+    engine.addImageProvider( QStringLiteral( "theme" ), new ThemeIconImageProvider() );
+    engine.rootContext()->setContextProperty( QStringLiteral( "oklchUtil" ), &oklchUtil );
+    engine.rootContext()->setContextProperty( QStringLiteral( "appSupervisor" ), &supervisor );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+
+    QCOMPARE( engine.rootObjects().size(), 1 );
+
+    QObject *rootObject = engine.rootObjects().first();
+    QQuickWindow *window = qobject_cast<QQuickWindow *>( rootObject );
+    QVERIFY( window != nullptr );
+    QVERIFY( QTest::qWaitForWindowExposed( window ) );
+
+    QTest::qWait( 120 );
+    failIfAnyWarnings( "inspector-title-post-load" );
+    clearMessages();
+
+    QQuickItem *rootItem = window->contentItem();
+    QVERIFY( rootItem != nullptr );
+
+    QQuickItem *joinRoomButton = findItemByObjectNameRecursive( rootItem, QStringLiteral( "joinRoomButton" ) );
+    QVERIFY2( joinRoomButton != nullptr, "joinRoomButton" );
+    clickItemCenter( *window, joinRoomButton );
+    QTest::qWait( 160 );
+    failIfAnyWarnings( "inspector-title-go-shell" );
+    clearMessages();
+
+    QQuickItem *firstCameraRow = findItemByObjectNamePrefixRecursive( rootItem, QStringLiteral( "sourceRow_camera_" ) );
+    QVERIFY2( firstCameraRow != nullptr, "expected at least one camera row" );
+    clickItemCenter( *window, firstCameraRow );
+
+    QQuickItem *title = findItemByObjectNameRecursive( rootItem, QStringLiteral( "sourceInspectorTitleLabel" ) );
+    QVERIFY2( title != nullptr, "sourceInspectorTitleLabel" );
+
+    QTRY_VERIFY_WITH_TIMEOUT( title->isVisible(), 1000 );
+
+    const QString titleText = title->property( "text" ).toString();
+    QVERIFY2( !titleText.contains( QStringLiteral( "— -" ) ), "inspector title contains bullet prefix" );
+
+    QQuickItem *shellPage = findItemByObjectNameRecursive( rootItem, QStringLiteral( "shellPage" ) );
+    QVERIFY2( shellPage != nullptr, "shellPage" );
+
+    shellPage->setProperty( "selectedSourceKind", QStringLiteral( "camera" ) );
+    shellPage->setProperty( "selectedSourceTitleLabel", QStringLiteral( "Test Device" ) );
+    shellPage->setProperty( "selectedSourceIsAvailable", false );
+    QVERIFY2( QMetaObject::invokeMethod( shellPage, "updateSelectedSourceTitle" ), "invoke updateSelectedSourceTitle" );
+    QCoreApplication::processEvents();
+
+    const QString unavailableText = title->property( "text" ).toString();
+    QVERIFY2( unavailableText.contains( QStringLiteral( "(not available)" ) ), "inspector title did not mark unavailable source" );
+
+    shellPage->setProperty( "selectedSourceIsAvailable", true );
+    QVERIFY2( QMetaObject::invokeMethod( shellPage, "updateSelectedSourceTitle" ), "invoke updateSelectedSourceTitle (available)" );
+    QCoreApplication::processEvents();
+
+    const QString availableText = title->property( "text" ).toString();
+    QVERIFY2( !availableText.contains( QStringLiteral( "(not available)" ) ), "inspector title still marks available source as unavailable" );
 }
 
 void tst_QmlUi::preferences_clickInsidePanel_doesNotClose()
@@ -3116,7 +3314,7 @@ int main( int argc, char **argv )
         localArgc = argc;
         localArgv = argv;
 
-        qtshims::applyBeforeQGuiApplication();
+        qtstartupshim::applyBeforeQGuiApplication();
 
         QGuiApplication app( localArgc, localArgv );
         tst_QmlUi tc;

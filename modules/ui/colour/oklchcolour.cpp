@@ -7,13 +7,18 @@ namespace {
 
 double clamp01( const double v )
 {
-    if ( v < 0.0 ) {
-        return 0.0;
+    double out;
+
+    out = v;
+
+    if ( out < 0.0 ) {
+        out = 0.0;
     }
-    if ( v > 1.0 ) {
-        return 1.0;
+    if ( out > 1.0 ) {
+        out = 1.0;
     }
-    return v;
+
+    return out;
 }
 
 double clampHueDegrees( const double degrees )
@@ -30,34 +35,48 @@ double clampHueDegrees( const double degrees )
 
 double srgbEncode( const double linear )
 {
+    double out;
+
+    out = 0.0;
+
     if ( linear <= 0.0 ) {
-        return 0.0;
-    }
-    if ( linear >= 1.0 ) {
-        return 1.0;
+        out = 0.0;
+    } else {
+        if ( linear >= 1.0 ) {
+            out = 1.0;
+        } else {
+            if ( linear <= 0.0031308 ) {
+                out = 12.92 * linear;
+            } else {
+                out = 1.055 * std::pow( linear, 1.0 / 2.4 ) - 0.055;
+            }
+        }
     }
 
-    if ( linear <= 0.0031308 ) {
-        return 12.92 * linear;
-    }
-
-    return 1.055 * std::pow( linear, 1.0 / 2.4 ) - 0.055;
+    return out;
 }
 
 double srgbDecode( const double u )
 {
+    double out;
+
+    out = 0.0;
+
     if ( u <= 0.0 ) {
-        return 0.0;
-    }
-    if ( u >= 1.0 ) {
-        return 1.0;
+        out = 0.0;
+    } else {
+        if ( u >= 1.0 ) {
+            out = 1.0;
+        } else {
+            if ( u <= 0.04045 ) {
+                out = u / 12.92;
+            } else {
+                out = std::pow( ( u + 0.055 ) / 1.055, 2.4 );
+            }
+        }
     }
 
-    if ( u <= 0.04045 ) {
-        return u / 12.92;
-    }
-
-    return std::pow( ( u + 0.055 ) / 1.055, 2.4 );
+    return out;
 }
 
 struct LinearRgb final
@@ -156,32 +175,34 @@ Oklch fitToSrgbGamut( const Oklch &oklch )
     Oklch clamped;
     double low;
     double high;
+    bool alreadyInGamut;
 
     out = clampOklch( oklch );
     clamped = out;
 
-    if ( isInSrgbGamut( clamped ) ) {
-        return out;
-    }
+    alreadyInGamut = isInSrgbGamut( clamped );
 
-    low = 0.0;
-    high = clamped.chroma;
+    if ( !alreadyInGamut ) {
+        low = 0.0;
+        high = clamped.chroma;
 
-    for ( int i = 0; i < 22; ++i ) {
-        const double mid = ( low + high ) / 2.0;
-        Oklch probe;
+        for ( int i = 0; i < 22; ++i ) {
+            const double mid = ( low + high ) / 2.0;
+            Oklch probe;
 
-        probe = clamped;
-        probe.chroma = mid;
+            probe = clamped;
+            probe.chroma = mid;
 
-        if ( isInSrgbGamut( probe ) ) {
-            low = mid;
-        } else {
-            high = mid;
+            if ( isInSrgbGamut( probe ) ) {
+                low = mid;
+            } else {
+                high = mid;
+            }
         }
+
+        out.chroma = low;
     }
 
-    out.chroma = low;
     return out;
 }
 

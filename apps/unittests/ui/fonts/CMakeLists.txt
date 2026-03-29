@@ -11,3 +11,5 @@ target_link_libraries( tst_fontpreviewsafetycache PRIVATE
 )
 
 add_test( NAME tst_fontpreviewsafetycache COMMAND tst_fontpreviewsafetycache )
+
+vcstream_apply_default_test_environment( tst_fontpreviewsafetycache )

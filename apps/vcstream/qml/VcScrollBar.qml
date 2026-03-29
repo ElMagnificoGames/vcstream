@@ -8,7 +8,7 @@ ScrollBar {
     property bool vcStyled: true
 
     implicitWidth: 12
-    width: implicitWidth
+    implicitHeight: 12
     minimumSize: 0.12
 
     // Prevent the thumb from painting outside the track during the first
@@ -33,7 +33,9 @@ ScrollBar {
     // Avoid a 1-frame "dot" when geometry is not yet settled.
     // Some legitimate scroll regions are short (for example, compact lists), so
     // keep the threshold low.
-    readonly property bool vcGeometryReady: ( control.width >= 8 ) && ( control.height >= 20 )
+    readonly property bool vcGeometryReady: ( control.orientation === Qt.Horizontal )
+        ? ( control.height >= 8 ) && ( control.width >= 20 )
+        : ( control.width >= 8 ) && ( control.height >= 20 )
     visible: vcGeometryReady && ( control.policy !== ScrollBar.AlwaysOff ) && vcCanScroll
     opacity: 1.0
 

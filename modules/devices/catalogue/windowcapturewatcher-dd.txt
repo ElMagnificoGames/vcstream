@@ -1,0 +1,91 @@
+= WindowCaptureWatcher
+
+== Description
+
+I am a small watcher for capturable windows.
+I poll Qt's window-capture API and report a stable, user-facing snapshot of capturable windows.
+
+I collaborate with `LocalDeviceCatalogue`, which owns the QML-facing device catalogue.
+I do not enumerate cameras, microphones, audio outputs, or screens. I do not start any capture.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by `LocalDeviceCatalogue` (QObject parent ownership).
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `WindowCaptureWatcher( QObject *parent )` starts polling for capturable window changes.
+
+- `void refreshNow()` performs a fast poll of `QWindowCapture::capturableWindows()`.
+  - If the set of windows changed (add/remove), emits a new snapshot immediately.
+  - If only window titles changed, records the pending names but does not emit immediately.
+
+- `void refreshTitlesIfDirty()` applies any pending title-only changes.
+  - This is intended to run on a slower cadence to avoid UI churn.
+
+Signals:
+- `void windowSnapshotAvailable( const QVariantList &windows, const QString &windowCaptureStatus )`
+  - Emitted when the watcher wants the catalogue's visible `windows` list (and status text) updated.
+  - `windows` is a `QVariantList` where each element is a `QVariantMap` with:
+    - key `id` (a string key), value type `QString` (stable identifier for this process run)
+    - key `name` (a string key), value type `QString` (the user-facing window name)
+    - Example element: `{ "id": "w12", "name": "OBS Studio" }`
+  - The list is sorted alphabetically by the `name` value.
+  - `windowCaptureStatus` is empty when enumeration is functioning.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+- Notes: must be used from a thread with a running Qt event loop.
+
+Errors:
+- Best-effort.
+- This watcher does not decide whether window enumeration should be enabled.
+  - The owning catalogue decides whether to create and use this watcher.
+  - As a result, this watcher does not read debug environment variables.
+
+== Implementation details
+
+- When Qt window capture is not available:
+  - Some Qt builds do not provide `QWindowCapture`/`QCapturableWindow`.
+  - In that case this watcher does not enumerate windows and does not emit `windowSnapshotAvailable()`.
+  - The owning `LocalDeviceCatalogue` is responsible for reporting the limitation (for example by setting `windowCaptureStatus`).
+  - Practical note: this usually depends on the Qt version and how Qt Multimedia was built; even when the API exists, runtime support may still vary by platform.
+
+- Why this module uses a PIMPL (`Impl`) design:
+  - Qt's window capture types (`QWindowCapture` and `QCapturableWindow`) are not available in all Qt builds.
+  - A naive approach is to use `#if __has_include( <QWindowCapture> )` in the public header and store `QCapturableWindow` values as members.
+    - That changes the *layout* of `WindowCaptureWatcher` depending on whether the header is visible to the compiler.
+    - In a modular build, different translation units can end up with different include paths and therefore make different decisions.
+    - If any translation unit instantiates the type with a different layout than the one used to compile the implementation, the result is undefined behaviour (often heap corruption discovered later in destruction).
+  - By keeping all `QWindowCapture`/`QCapturableWindow` storage inside `WindowCaptureWatcher::Impl` (in the `.cpp` file), the public header has a stable class layout.
+  - This avoids a whole category of build-configuration-specific crashes, while still allowing the implementation to compile out the enumeration logic when Qt does not provide the API.
+
+- What lives in `Impl`:
+  - The two polling timers.
+  - The visible snapshot and pending-title snapshot.
+  - When available, the current set of `QCapturableWindow` identities and the per-process stable ids.
+
+- Contract note:
+  - The PIMPL design is an internal build-safety mechanism only.
+  - It does not change the public behaviour of `WindowCaptureWatcher`.
+
+- Why the output is a list of maps (not a list of strings):
+  - The owning device catalogue exposes other device lists as `QVariantList` of record-like maps (for example cameras include `name`, `id`, `isDefault`, and `available`).
+  - Windows currently only need a `name`, but keeping the same "list of records" shape makes QML delegates and tests simpler (always read a `name` field).
+  - This shape is also easier to extend later (for example to add a stable id or extra diagnostics) without having to change the element type and update every QML consumer.
+
+- Poll cadence:
+  - Fast poll: about every 2 seconds, to detect add/remove changes.
+  - Title refresh: about every 30 seconds, to apply title-only changes.
+
+- Title churn handling:
+  - When the set of capturable windows is unchanged but descriptions differ, treat it as title churn.
+  - Defer updating the visible list until the slower title refresh tick.
+  - After applying deferred titles, refresh the stored description snapshot so the same churn is not repeatedly detected.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore, QtGui, QtMultimedia).

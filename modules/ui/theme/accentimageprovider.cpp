@@ -12,21 +12,31 @@ namespace {
 
 int safeDim( const int v, const int fallback )
 {
+    int out;
+
+    out = fallback;
+
     if ( v > 0 ) {
-        return v;
+        out = v;
     }
-    return fallback;
+
+    return out;
 }
 
 double clamp01( const double v )
 {
-    if ( v < 0.0 ) {
-        return 0.0;
+    double out;
+
+    out = v;
+
+    if ( out < 0.0 ) {
+        out = 0.0;
     }
-    if ( v > 1.0 ) {
-        return 1.0;
+    if ( out > 1.0 ) {
+        out = 1.0;
     }
-    return v;
+
+    return out;
 }
 
 }

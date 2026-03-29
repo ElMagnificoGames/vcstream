@@ -19,7 +19,73 @@ Control {
     property bool cameraPreviewActive: false
     property var cameraPreviewHandle: null
 
+    readonly property bool cameraPreviewDisconnected: {
+        if ( !root.cameraPreviewActive ) {
+            return false
+        }
+        if ( root.cameraPreviewHandle === null ) {
+            return false
+        }
+        if ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) {
+            return false
+        }
+        if ( !appSupervisor || !appSupervisor.deviceCatalogue ) {
+            return false
+        }
+        return !root.isDeviceAvailable( appSupervisor.deviceCatalogue.cameras, root.cameraPreviewDeviceId )
+    }
+
     signal closeRequested()
+
+    function anyAvailableDevices( list ) {
+        if ( !list ) {
+            return false
+        }
+
+        for ( var i = 0; i < list.length; ++i ) {
+            if ( list[i].available !== false ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    function isDeviceAvailable( list, id ) {
+        if ( !list || !id || id.length <= 0 ) {
+            return false
+        }
+
+        for ( var i = 0; i < list.length; ++i ) {
+            if ( list[i].id === id ) {
+                return ( list[i].available !== false )
+            }
+        }
+        return false
+    }
+
+    function decoratedDeviceList( list ) {
+        if ( !list ) {
+            return []
+        }
+
+        var out = []
+        for ( var i = 0; i < list.length; ++i ) {
+            var item = list[i]
+            var name = item.name
+            if ( item.available === false ) {
+                name += " (not available)"
+            }
+
+            out.push( {
+                id: item.id,
+                name: name,
+                isDefault: item.isDefault,
+                available: item.available
+            } )
+        }
+
+        return out
+    }
 
     function ensureCameraPreviewDeviceSelected() {
         if ( !appSupervisor || !appSupervisor.deviceCatalogue ) {
@@ -30,6 +96,13 @@ Control {
         if ( !cameras || cameras.length <= 0 ) {
             cameraPreviewDeviceId = ""
             return
+        }
+
+        var hasAvailable = false
+        for ( var a = 0; a < cameras.length; ++a ) {
+            if ( cameras[a].available !== false ) {
+                hasAvailable = true
+            }
         }
 
         var found = false
@@ -43,14 +116,21 @@ Control {
             return
         }
 
-        for ( var j = 0; j < cameras.length; ++j ) {
-            if ( cameras[j].isDefault ) {
-                cameraPreviewDeviceId = cameras[j].id
-                return
+        if ( cameraPreviewDeviceId.length <= 0 && hasAvailable ) {
+            for ( var j = 0; j < cameras.length; ++j ) {
+                if ( cameras[j].available !== false && cameras[j].isDefault ) {
+                    cameraPreviewDeviceId = cameras[j].id
+                    return
+                }
+            }
+
+            for ( var k = 0; k < cameras.length; ++k ) {
+                if ( cameras[k].available !== false ) {
+                    cameraPreviewDeviceId = cameras[k].id
+                    return
+                }
             }
         }
-
-        cameraPreviewDeviceId = cameras[0].id
     }
 
     function openCameraPreview() {
@@ -108,10 +188,6 @@ Control {
     readonly property color scrimColour: ( theme ? theme.scrimColour : Qt.rgba( pal.shadow.r, pal.shadow.g, pal.shadow.b, 0.35 ) )
 
     onOpenChanged: {
-        if ( open && appSupervisor && appSupervisor.deviceCatalogue ) {
-            appSupervisor.deviceCatalogue.refresh()
-        }
-
         if ( !open ) {
             closeCameraPreview()
         }
@@ -122,10 +198,6 @@ Control {
     }
 
     onCurrentCategoryIndexChanged: {
-        if ( open && currentCategoryIndex === 1 && appSupervisor && appSupervisor.deviceCatalogue ) {
-            appSupervisor.deviceCatalogue.refresh()
-        }
-
         if ( open && currentCategoryIndex === 0 && appSupervisor && appSupervisor.fontFamilies ) {
             fontFamiliesCache = appSupervisor.fontFamilies()
         }
@@ -145,9 +217,19 @@ Control {
 
                 // Always reserve space so the scroll bar cannot cover content.
                 rightPadding: ( generalScrollBar.width + 12 )
+                bottomPadding: ( generalHScrollBar.visible ? ( generalHScrollBar.height + 12 ) : 0 )
 
                 // Disable Qt style/plugin scroll bars and indicators.
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                ScrollBar.horizontal: VcScrollBar {
+                    id: generalHScrollBar
+                    objectName: "preferencesGeneralScrollBarH"
+                    theme: root.theme
+                    policy: ScrollBar.AsNeeded
+                    orientation: Qt.Horizontal
+                    width: generalScrollView.width
+                    x: 0
+                    y: generalScrollView.height - height
+                }
 
                 ScrollBar.vertical: VcScrollBar {
                     id: generalScrollBar
@@ -761,20 +843,6 @@ Control {
                         elide: Text.ElideRight
                         color: ( root.theme ? root.theme.textColour : root.pal.text )
                     }
-
-                    VcButton {
-                        objectName: "preferencesDeviceRefreshButton"
-                        theme: root.theme
-                        tone: "secondary"
-                        compact: true
-                        text: "Refresh"
-
-                        onClicked: {
-                            if ( appSupervisor && appSupervisor.deviceCatalogue ) {
-                                appSupervisor.deviceCatalogue.refresh()
-                            }
-                        }
-                    }
                 }
 
                 Item {
@@ -789,8 +857,18 @@ Control {
 
                         // Always reserve space so the scroll bar cannot cover content.
                         rightPadding: ( devicesScrollBar.width + 12 )
+                        bottomPadding: ( devicesHScrollBar.visible ? ( devicesHScrollBar.height + 12 ) : 0 )
 
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ScrollBar.horizontal: VcScrollBar {
+                            id: devicesHScrollBar
+                            objectName: "preferencesDevicesScrollBarH"
+                            theme: root.theme
+                            policy: ScrollBar.AsNeeded
+                            orientation: Qt.Horizontal
+                            width: devicesScrollView.width
+                            x: 0
+                            y: devicesScrollView.height - height
+                        }
 
                         ScrollBar.vertical: VcScrollBar {
                             id: devicesScrollBar
@@ -833,6 +911,7 @@ Control {
                                         title: "Cameras",
                                         items: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.cameras : [] ),
                                         defaultSuffix: true,
+                                        statusText: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.cameraDiscoveryStatus : "" ),
                                         emptyText: "No cameras detected."
                                     },
                                     {
@@ -861,6 +940,17 @@ Control {
                                     theme: root.theme
                                     accentRole: "none"
                                     property var sectionData: modelData
+                                    readonly property bool sectionHasAvailable: {
+                                        if ( !sectionData || !sectionData.items ) {
+                                            return false
+                                        }
+                                        for ( var i = 0; i < sectionData.items.length; ++i ) {
+                                            if ( sectionData.items[i].available !== false ) {
+                                                return true
+                                            }
+                                        }
+                                        return false
+                                    }
 
                                     ColumnLayout {
                                         width: parent.width
@@ -945,9 +1035,12 @@ Control {
                                                                 wrapMode: Text.Wrap
                                                                 color: ( root.theme ? root.theme.textColour : root.pal.text )
                                                                 text: {
-                                                                    var out = modelData.name
+                                                                    var out = "- " + modelData.name
                                                                     if ( deviceSectionCard.sectionData.defaultSuffix && modelData.isDefault ) {
                                                                         out += " (default)"
+                                                                    }
+                                                                    if ( modelData.available === false ) {
+                                                                        out += " (not available)"
                                                                     }
                                                                     if ( deviceSectionCard.sectionData.detailKey && modelData[deviceSectionCard.sectionData.detailKey] ) {
                                                                         out += "  " + modelData[deviceSectionCard.sectionData.detailKey]
@@ -973,7 +1066,7 @@ Control {
                                                 }
 
                                                 Label {
-                                                    visible: deviceSectionCard.sectionData.items.length === 0
+                                                    visible: !deviceSectionCard.sectionHasAvailable
                                                     width: sectionList.width
                                                     wrapMode: Text.Wrap
                                                     text: deviceSectionCard.sectionData.emptyText
@@ -1170,7 +1263,9 @@ Control {
                                 theme: root.theme
                                 Layout.fillWidth: true
                                 enabled: ( appSupervisor && appSupervisor.deviceCatalogue && appSupervisor.deviceCatalogue.cameras.length > 0 )
-                                model: ( appSupervisor && appSupervisor.deviceCatalogue ? appSupervisor.deviceCatalogue.cameras : [] )
+                                model: ( appSupervisor && appSupervisor.deviceCatalogue
+                                    ? root.decoratedDeviceList( appSupervisor.deviceCatalogue.cameras )
+                                    : [] )
                                 textRole: "name"
 
                                 function indexForDeviceId( id ) {
@@ -1204,7 +1299,9 @@ Control {
                                 theme: root.theme
                                 tone: ( root.cameraPreviewActive ? "secondary" : "primary" )
                                 text: ( root.cameraPreviewActive ? "Stop preview" : "Start preview" )
-                                enabled: ( appSupervisor && appSupervisor.deviceCatalogue && appSupervisor.deviceCatalogue.cameras.length > 0 )
+                                enabled: ( root.cameraPreviewActive
+                                    || ( appSupervisor && appSupervisor.deviceCatalogue
+                                        && root.isDeviceAvailable( appSupervisor.deviceCatalogue.cameras, root.cameraPreviewDeviceId ) ) )
                                 hoverEnabled: true
                                 property bool testSkipActivate: true
 
@@ -1233,24 +1330,68 @@ Control {
                                 objectName: "preferencesCameraPreviewVideo"
                                 anchors.fill: parent
                                 fillMode: VideoOutput.PreserveAspectFit
-                                visible: ( root.cameraPreviewHandle !== null )
+                                visible: ( root.cameraPreviewHandle !== null
+                                    && !( root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) )
+                                opacity: ( root.cameraPreviewDisconnected ? 0.35 : 1.0 )
+                            }
+
+                            Rectangle {
+                                objectName: "preferencesCameraPreviewDisconnectedOverlay"
+                                anchors.fill: parent
+                                radius: preferencesCameraPreviewFrame.radius
+                                color: root.scrimColour
+                                visible: root.cameraPreviewDisconnected
+
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    width: Math.min( parent.width - 16, 260 )
+                                    spacing: 6
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: "Disconnected"
+                                        font.pixelSize: ( root.theme ? root.theme.fontHeadingPx : 18 )
+                                        color: ( root.theme ? root.theme.windowTextColour : root.pal.windowText )
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: "This camera is not available right now. Turn it on, or choose another camera."
+                                        font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
+                                        color: ( root.theme ? root.theme.windowTextColour : root.pal.windowText )
+                                    }
+                                }
                             }
 
                             Label {
                                 anchors.centerIn: parent
                                 text: {
-                                    if ( !appSupervisor || !appSupervisor.deviceCatalogue || appSupervisor.deviceCatalogue.cameras.length <= 0 ) {
-                                        return "No camera devices detected."
-                                    }
                                     if ( !root.cameraPreviewActive ) {
                                         return "Preview is stopped."
                                     }
                                     if ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) {
                                         return root.cameraPreviewHandle.errorText
                                     }
+                                    if ( !appSupervisor || !appSupervisor.deviceCatalogue || !appSupervisor.deviceCatalogue.cameras ) {
+                                        return "No camera devices detected."
+                                    }
+
+                                    var hasAvailable = false
+                                    for ( var i = 0; i < appSupervisor.deviceCatalogue.cameras.length; ++i ) {
+                                        if ( appSupervisor.deviceCatalogue.cameras[i].available !== false ) {
+                                            hasAvailable = true
+                                        }
+                                    }
+                                    if ( !hasAvailable ) {
+                                        return "No camera devices detected."
+                                    }
                                     return "Starting camera..."
                                 }
-                                visible: ( root.cameraPreviewHandle === null )
+                                visible: ( root.cameraPreviewHandle === null
+                                    || ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) )
                                 color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
                             }
                         }

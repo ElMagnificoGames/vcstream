@@ -1,6 +1,7 @@
 add_subdirectory( app/lifecycle )
 add_subdirectory( app/defence )
 add_subdirectory( devices/capture )
+add_subdirectory( devices/catalogue )
 add_subdirectory( qml )
 add_subdirectory( style )
 add_subdirectory( ui/geometry )

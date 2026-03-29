@@ -12,3 +12,5 @@ target_link_libraries( tst_oklchcolour PRIVATE
 )
 
 add_test( NAME tst_oklchcolour COMMAND tst_oklchcolour )
+
+vcstream_apply_default_test_environment( tst_oklchcolour )

@@ -1,0 +1,51 @@
+= FakeDeviceNameGenerator
+
+== Description
+
+I am a small, deterministic fake device name generator.
+I generate stable, human-readable device name lists for debugging and UI smoke testing.
+
+I collaborate with `LocalDeviceCatalogue`, which uses me to build fake device catalogues when real device enumeration is disabled for debugging.
+I do not enumerate real devices. I do not talk to Qt Multimedia backends. I do not persist state.
+
+State model:
+- Thread affinity: any thread, but callers typically use me on the UI thread.
+- Lifetime/ownership: value type; owned by the caller.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `FakeDeviceNameGenerator()` constructs a generator seeded from `VCSTREAM_DEBUG_TEST_SEED` (or a fixed default seed).
+
+- `FakeDeviceNameGenerator( quint32 seed )` constructs a generator with an explicit seed.
+
+- `bool maybeUpdateNames( QStringList *names, int keepPercent )` updates `names` in-place.
+  - `keepPercent` is clamped to 0-100.
+  - Most of the time it keeps the list unchanged.
+  - The rest of the time it replaces the list with a new subset of `fixedNames()`.
+  - Returns true when it changes the list.
+
+- `QStringList generateSubset()` returns a non-empty subset of `fixedNames()`.
+
+- `static const QStringList &fixedNames()` returns the fixed list of fake names.
+
+Arguments:
+- `names` must be non-null.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+
+Errors:
+- No explicit error reporting. Invalid seed text in `VCSTREAM_DEBUG_TEST_SEED` is ignored and the default seed is used.
+
+== Implementation details
+
+- The fixed list is a human-friendly set of tokens (currently the NATO alphabet words).
+- Subsets are generated via a random bitmask. If the chosen subset is empty, one random element is forced in.
+- The generator is deterministic for a given seed so UI tests can be stable.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore).

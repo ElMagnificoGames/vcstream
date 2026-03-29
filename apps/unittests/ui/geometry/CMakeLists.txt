@@ -11,3 +11,5 @@ target_link_libraries( tst_windowrectfitter PRIVATE
 )
 
 add_test( NAME tst_windowrectfitter COMMAND tst_windowrectfitter )
+
+vcstream_apply_default_test_environment( tst_windowrectfitter )

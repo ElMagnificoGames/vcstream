@@ -83,7 +83,7 @@ void tst_AppSupervisor::appVersion_roundTripsExplicitValues()
 void tst_AppSupervisor::appVersion_roundTripsDeterministicRandomAscii()
 {
     const quint32 defaultSeed = 0xC0FFEEu;
-    const quint32 seed = testhelpers::seedFromEnvironmentOrDefault( "VCSTREAM_TEST_SEED", defaultSeed );
+    const quint32 seed = testhelpers::seedFromEnvironmentOrDefault( "VCSTREAM_DEBUG_TEST_SEED", defaultSeed );
     QRandomGenerator rng( seed );
     AppSupervisor supervisor;
     const int cases = 25;
@@ -95,7 +95,7 @@ void tst_AppSupervisor::appVersion_roundTripsDeterministicRandomAscii()
 
         if ( actualVersion != applicationVersionTestValue ) {
             const QString message =
-                QStringLiteral( "Mismatch: VCSTREAM_TEST_SEED=%1 case=%2 expected='%3' actual='%4'" )
+                QStringLiteral( "Mismatch: VCSTREAM_DEBUG_TEST_SEED=%1 case=%2 expected='%3' actual='%4'" )
                     .arg( seed )
                     .arg( i )
                     .arg( applicationVersionTestValue )

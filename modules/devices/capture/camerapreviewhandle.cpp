@@ -69,18 +69,16 @@ void CameraPreviewHandle::setErrorText( const QString &text )
 
 void CameraPreviewHandle::setViewSink( QVideoSink *sink )
 {
-    if ( m_viewSink == sink ) {
-        return;
-    }
+    if ( m_viewSink != sink ) {
+        if ( m_registered ) {
+            m_owner.unregisterViewSink( *this );
+            m_registered = false;
+        }
 
-    if ( m_registered ) {
-        m_owner.unregisterViewSink( *this );
-        m_registered = false;
-    }
-
-    m_viewSink = sink;
-    if ( m_viewSink != nullptr ) {
-        m_owner.registerViewSink( *this );
+        m_viewSink = sink;
+        if ( m_viewSink != nullptr ) {
+            m_owner.registerViewSink( *this );
+        }
     }
 }
 

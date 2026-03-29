@@ -10,7 +10,7 @@ target_link_libraries( vcstream PRIVATE
     vcstream_warnings
     vcstream_app_defence
     vcstream_app_lifecycle
-    vcstream_app_platform
+    vcstream_platform_shim_qtstartupshim
     vcstream_ui_geometry
     vcstream_ui_placement
     vcstream_ui_colour

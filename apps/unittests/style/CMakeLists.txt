@@ -14,3 +14,5 @@ target_compile_definitions( tst_style PRIVATE
 )
 
 add_test( NAME tst_style COMMAND tst_style )
+
+vcstream_apply_default_test_environment( tst_style )

@@ -1,0 +1,64 @@
+= DeviceMemoryCache
+
+== Description
+
+I am a small in-memory cache for recently seen local devices.
+I help the UI stay stable when devices temporarily disappear and later reappear.
+
+I collaborate with `LocalDeviceCatalogue`, which uses me for cameras, microphones, and audio outputs.
+I do not enumerate devices myself. I do not persist across application restarts.
+
+State model:
+- Thread affinity: caller's thread (typically UI thread).
+- Lifetime/ownership: value type; owned by the caller.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `DeviceMemoryCache( int capacity )` constructs a cache with a bounded capacity.
+
+- `void setCapacity( int capacity )` sets the maximum number of known devices.
+  - Values below 0 are treated as 0.
+  - When capacity is 0, the cache stores nothing.
+
+- `int capacity() const` returns the current capacity.
+
+- `void clear()` drops all cached device knowledge.
+
+- `void updateFromSnapshot( const QList<DeviceInfo> &snapshot )`
+  - Updates the cache from the current device list.
+  - A snapshot entry is identified by `DeviceInfo.id`.
+  - Devices not present in the snapshot are marked as missing.
+  - `DeviceInfo.name` and `DeviceInfo.isDefault` are refreshed for seen devices.
+  - The cache updates an internal "last seen" serial used for eviction.
+
+- `void appendMissingToVariantList( QVariantList *inOutList, const QSet<QString> &snapshotIds ) const`
+  - Appends cached devices that are not present in `snapshotIds`.
+  - Each appended item is a `QVariantMap` with keys:
+    - `name` (`QString`)
+    - `id` (`QString`)
+    - `isDefault` (`bool`, always false for missing entries)
+    - `available` (`bool`, always false for missing entries)
+  - Missing entries are sorted alphabetically by `name` (case-insensitive), then by `id`.
+
+Thread safety:
+- Thread-safe: No.
+- Re-entrant: No.
+
+Errors:
+- No explicit error reporting.
+- Entries with an empty `id` are ignored.
+
+== Implementation details
+
+- Storage: `QHash<QString, KnownDevice>` keyed by device `id`.
+
+- Eviction policy:
+  - Enforced after updates and capacity changes.
+  - Prefer evicting missing devices first.
+  - Otherwise evict the least recently seen device (by a monotonically increasing serial).
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtCore).

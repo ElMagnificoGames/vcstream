@@ -16,10 +16,15 @@ namespace {
 
 static bool isNonWhite( const QRgb px )
 {
-    if ( qAlpha( px ) == 0 ) {
-        return false;
+    bool out;
+
+    out = false;
+
+    if ( qAlpha( px ) != 0 ) {
+        out = !( qRed( px ) == 255 && qGreen( px ) == 255 && qBlue( px ) == 255 );
     }
-    return !( qRed( px ) == 255 && qGreen( px ) == 255 && qBlue( px ) == 255 );
+
+    return out;
 }
 
 struct MaskStats {
@@ -32,44 +37,46 @@ struct MaskStats {
 static MaskStats computeMaskStats( const QImage &raster, const QImage &ref )
 {
     MaskStats st;
+    bool ok;
+
     st.rasterInk = 0;
     st.refInk = 0;
     st.outsideInk = 0;
     st.missingInk = 0;
 
-    if ( raster.isNull() || ref.isNull() ) {
-        return st;
-    }
-    if ( raster.size() != ref.size() ) {
-        return st;
+    ok = !( raster.isNull() || ref.isNull() );
+    if ( ok ) {
+        ok = ( raster.size() == ref.size() );
     }
 
-    const QImage rr = ( raster.format() == QImage::Format_ARGB32_Premultiplied )
-        ? raster
-        : raster.convertToFormat( QImage::Format_ARGB32_Premultiplied );
-    const QImage bb = ( ref.format() == QImage::Format_ARGB32_Premultiplied )
-        ? ref
-        : ref.convertToFormat( QImage::Format_ARGB32_Premultiplied );
+    if ( ok ) {
+        const QImage rr = ( raster.format() == QImage::Format_ARGB32_Premultiplied )
+            ? raster
+            : raster.convertToFormat( QImage::Format_ARGB32_Premultiplied );
+        const QImage bb = ( ref.format() == QImage::Format_ARGB32_Premultiplied )
+            ? ref
+            : ref.convertToFormat( QImage::Format_ARGB32_Premultiplied );
 
-    const int w = rr.width();
-    const int h = rr.height();
-    for ( int y = 0; y < h; ++y ) {
-        const QRgb *rrow = reinterpret_cast<const QRgb *>( rr.constScanLine( y ) );
-        const QRgb *brow = reinterpret_cast<const QRgb *>( bb.constScanLine( y ) );
-        for ( int x = 0; x < w; ++x ) {
-            const bool ri = isNonWhite( rrow[ x ] );
-            const bool bi = isNonWhite( brow[ x ] );
-            if ( ri ) {
-                ++st.rasterInk;
-            }
-            if ( bi ) {
-                ++st.refInk;
-            }
-            if ( ri && !bi ) {
-                ++st.outsideInk;
-            }
-            if ( !ri && bi ) {
-                ++st.missingInk;
+        const int w = rr.width();
+        const int h = rr.height();
+        for ( int y = 0; y < h; ++y ) {
+            const QRgb *rrow = reinterpret_cast<const QRgb *>( rr.constScanLine( y ) );
+            const QRgb *brow = reinterpret_cast<const QRgb *>( bb.constScanLine( y ) );
+            for ( int x = 0; x < w; ++x ) {
+                const bool ri = isNonWhite( rrow[ x ] );
+                const bool bi = isNonWhite( brow[ x ] );
+                if ( ri ) {
+                    ++st.rasterInk;
+                }
+                if ( bi ) {
+                    ++st.refInk;
+                }
+                if ( ri && !bi ) {
+                    ++st.outsideInk;
+                }
+                if ( !ri && bi ) {
+                    ++st.missingInk;
+                }
             }
         }
     }
@@ -79,65 +86,76 @@ static MaskStats computeMaskStats( const QImage &raster, const QImage &ref )
 
 static double computeMaskIoU( const QImage &a, const QImage &b )
 {
+    double out;
     const MaskStats st = computeMaskStats( a, b );
     const quint64 inter = ( st.rasterInk >= st.outsideInk ) ? ( st.rasterInk - st.outsideInk ) : 0;
     const quint64 uni = st.rasterInk + st.missingInk;
-    if ( uni == 0 ) {
-        return 0.0;
+
+    out = 0.0;
+    if ( uni != 0 ) {
+        out = static_cast<double>( inter ) / static_cast<double>( uni );
     }
-    return static_cast<double>( inter ) / static_cast<double>( uni );
+
+    return out;
 }
 
 static bool blitAlphaMaskAsBlack( QImage &dst, const QImage &alpha, const QPoint topLeft )
 {
-    if ( dst.isNull() || alpha.isNull() ) {
-        return false;
-    }
+    bool out;
 
-    const QImage aa = ( alpha.format() == QImage::Format_Alpha8 ) ? alpha : alpha.convertToFormat( QImage::Format_Alpha8 );
-    if ( aa.isNull() ) {
-        return false;
-    }
+    out = false;
 
-    const int w = aa.width();
-    const int h = aa.height();
+    if ( !( dst.isNull() || alpha.isNull() ) ) {
+        const QImage aa = ( alpha.format() == QImage::Format_Alpha8 ) ? alpha : alpha.convertToFormat( QImage::Format_Alpha8 );
+        if ( !aa.isNull() ) {
+            const int w = aa.width();
+            const int h = aa.height();
 
-    for ( int y = 0; y < h; ++y ) {
-        const int dy = topLeft.y() + y;
-        if ( dy < 0 || dy >= dst.height() ) {
-            continue;
-        }
+            for ( int y = 0; y < h; ++y ) {
+                const int dy = topLeft.y() + y;
+                if ( dy < 0 || dy >= dst.height() ) {
+                    continue;
+                }
 
-        const uchar *arow = aa.constScanLine( y );
-        QRgb *drow = reinterpret_cast<QRgb *>( dst.scanLine( dy ) );
-        for ( int x = 0; x < w; ++x ) {
-            const int dx = topLeft.x() + x;
-            if ( dx < 0 || dx >= dst.width() ) {
-                continue;
+                const uchar *arow = aa.constScanLine( y );
+                QRgb *drow = reinterpret_cast<QRgb *>( dst.scanLine( dy ) );
+                for ( int x = 0; x < w; ++x ) {
+                    const int dx = topLeft.x() + x;
+                    if ( dx < 0 || dx >= dst.width() ) {
+                        continue;
+                    }
+
+                    if ( arow[ x ] > 0 ) {
+                        drow[ dx ] = qRgba( 0, 0, 0, 255 );
+                    }
+                }
             }
 
-            if ( arow[ x ] > 0 ) {
-                drow[ dx ] = qRgba( 0, 0, 0, 255 );
-            }
+            out = true;
         }
     }
 
-    return true;
+    return out;
 }
 
 static QImage renderReferenceMask( const QString &text, const QFont &font, const QSize &size, const int margin )
 {
+    QImage out;
     QImage img( size, QImage::Format_ARGB32_Premultiplied );
+    bool ok;
+
+    out = QImage();
+    ok = true;
     img.fill( qRgba( 255, 255, 255, 255 ) );
 
     const QRawFont raw = QRawFont::fromFont( font );
-    if ( !raw.isValid() ) {
-        return QImage();
+    if ( ok ) {
+        ok = raw.isValid();
     }
 
     const QVector<quint32> glyphs = raw.glyphIndexesForString( text );
-    if ( glyphs.isEmpty() ) {
-        return QImage();
+    if ( ok ) {
+        ok = !glyphs.isEmpty();
     }
 
     const QVector<QPointF> adv = raw.advancesForGlyphIndexes( glyphs );
@@ -188,11 +206,15 @@ static QImage renderReferenceMask( const QString &text, const QFont &font, const
         p.end();
     }
 
-    if ( outlineGlyphs <= 0 && alphaGlyphs <= 0 ) {
-        return QImage();
+    if ( ok ) {
+        ok = !( outlineGlyphs <= 0 && alphaGlyphs <= 0 );
     }
 
-    return img;
+    if ( ok ) {
+        out = img;
+    }
+
+    return out;
 }
 
 static QImage renderRasterMask( const QString &text, const QFont &font, const QSize &size, const int margin )
@@ -216,79 +238,93 @@ static QImage renderRasterMask( const QString &text, const QFont &font, const QS
 
 static bool checkPreviewLooksSane( const QString &family, const int pixelSize )
 {
-    if ( family.trimmed().isEmpty() ) {
-        return true;
-    }
+    bool out;
+    bool skipFurther;
 
-    const int px = ( pixelSize > 0 ) ? pixelSize : 16;
-    const int ss = VCSTREAM_FONT_PREVIEW_SAFETY_CHECK_SUPERSAMPLE;
+    out = true;
+    skipFurther = false;
 
-    QFont f;
-    f.setFamily( family );
-    f.setPixelSize( px * ss );
+    if ( !family.trimmed().isEmpty() ) {
+        const int px = ( pixelSize > 0 ) ? pixelSize : 16;
+        const int ss = VCSTREAM_FONT_PREVIEW_SAFETY_CHECK_SUPERSAMPLE;
 
-    // If Qt resolves to a different family, treat it as safe for preview.
-    {
-        const QFontInfo info( f );
-        if ( info.family().compare( family, Qt::CaseInsensitive ) != 0 ) {
-            return true;
+        QFont f;
+        f.setFamily( family );
+        f.setPixelSize( px * ss );
+
+        // If Qt resolves to a different family, treat it as safe for preview.
+        {
+            const QFontInfo info( f );
+            if ( info.family().compare( family, Qt::CaseInsensitive ) != 0 ) {
+                skipFurther = true;
+            }
         }
-    }
 
-    const QString text = QStringLiteral( "Ag" );
-    const int w = 220;
-    const int h = 80;
-    const int margin = 12;
-    const QSize scaledSize( w * ss, h * ss );
+        const QString text = QStringLiteral( "Ag" );
+        const int w = 220;
+        const int h = 80;
+        const int margin = 12;
+        const QSize scaledSize( w * ss, h * ss );
 
-    // Detect per-glyph fallback (font merging).
-    const QImage rasterMergedScaled = renderRasterMask( text, f, scaledSize, margin * ss );
+        if ( !skipFurther ) {
+            // Detect per-glyph fallback (font merging).
+            const QImage rasterMergedScaled = renderRasterMask( text, f, scaledSize, margin * ss );
 
-    QFont noMergeFont = f;
-    noMergeFont.setStyleStrategy( QFont::NoFontMerging );
-    const QImage rasterNoMergeScaled = renderRasterMask( text, noMergeFont, scaledSize, margin * ss );
+            QFont noMergeFont = f;
+            noMergeFont.setStyleStrategy( QFont::NoFontMerging );
+            const QImage rasterNoMergeScaled = renderRasterMask( text, noMergeFont, scaledSize, margin * ss );
 
-    if ( rasterMergedScaled.isNull() || rasterNoMergeScaled.isNull() ) {
-        return false;
-    }
+            if ( rasterMergedScaled.isNull() || rasterNoMergeScaled.isNull() ) {
+                out = false;
+                skipFurther = true;
+            }
 
-    const QImage rasterMerged = rasterMergedScaled.scaled( w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
-    const QImage rasterNoMerge = rasterNoMergeScaled.scaled( w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
+            if ( !skipFurther ) {
+                const QImage rasterMerged = rasterMergedScaled.scaled( w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
+                const QImage rasterNoMerge = rasterNoMergeScaled.scaled( w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
 
-    {
-        const MaskStats stMerge = computeMaskStats( rasterMerged, rasterNoMerge );
-        if ( stMerge.rasterInk > 0 && stMerge.refInk > 0 ) {
-            const double iouMerge = computeMaskIoU( rasterMerged, rasterNoMerge );
-            if ( iouMerge < 0.25 ) {
-                return true;
+                {
+                    const MaskStats stMerge = computeMaskStats( rasterMerged, rasterNoMerge );
+                    if ( stMerge.rasterInk > 0 && stMerge.refInk > 0 ) {
+                        const double iouMerge = computeMaskIoU( rasterMerged, rasterNoMerge );
+                        if ( iouMerge < 0.25 ) {
+                            out = true;
+                            skipFurther = true;
+                        }
+                    }
+                }
+
+                if ( !skipFurther ) {
+                    const QImage refScaled = renderReferenceMask( text, f, scaledSize, margin * ss );
+
+                    if ( refScaled.isNull() ) {
+                        const MaskStats st = computeMaskStats( rasterMerged, rasterMerged );
+                        out = st.rasterInk > 0;
+                        skipFurther = true;
+                    } else {
+                        const QImage ref = refScaled.scaled( w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
+                        const MaskStats st = computeMaskStats( rasterMerged, ref );
+                        if ( st.rasterInk == 0 || st.refInk == 0 ) {
+                            out = false;
+                            skipFurther = true;
+                        } else {
+                            const double outsideFrac = static_cast<double>( st.outsideInk ) / static_cast<double>( st.rasterInk );
+                            const double missingFrac = static_cast<double>( st.missingInk ) / static_cast<double>( st.refInk );
+
+                            if ( outsideFrac > 0.55 ) {
+                                out = false;
+                            }
+                            if ( missingFrac > 0.90 ) {
+                                out = false;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    const QImage refScaled = renderReferenceMask( text, f, scaledSize, margin * ss );
-
-    if ( refScaled.isNull() ) {
-        const MaskStats st = computeMaskStats( rasterMerged, rasterMerged );
-        return st.rasterInk > 0;
-    }
-
-    const QImage ref = refScaled.scaled( w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
-    const MaskStats st = computeMaskStats( rasterMerged, ref );
-    if ( st.rasterInk == 0 || st.refInk == 0 ) {
-        return false;
-    }
-
-    const double outsideFrac = static_cast<double>( st.outsideInk ) / static_cast<double>( st.rasterInk );
-    const double missingFrac = static_cast<double>( st.missingInk ) / static_cast<double>( st.refInk );
-
-    if ( outsideFrac > 0.55 ) {
-        return false;
-    }
-    if ( missingFrac > 0.90 ) {
-        return false;
-    }
-
-    return true;
+    return out;
 }
 
 class FontPreviewSafetyWorker final : public QObject

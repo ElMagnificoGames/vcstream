@@ -623,7 +623,7 @@ Cleanup
 ### Decisions
 
 - Style default: set Qt Quick Controls 2 to `Basic` via `qtquickcontrols2.conf` rather than using environment variables or per-machine configuration.
-- Platform shims: introduced `modules/app/platform/qtshims.*` as a narrowly scoped place for platform-specific Qt startup defaults, with an explicit warning against growth into a general helper bucket.
+- Platform shims: introduced a narrowly scoped place for platform-specific Qt startup defaults, with an explicit warning against growth into a general helper bucket.
 - Warnings policy: apply `-Wconversion` (and `-Werror`) consistently across non-MSVC builds so narrowing/sign-conversion issues do not slip through silently on Linux.
 
 ### Technical notes
@@ -632,9 +632,10 @@ Cleanup
   - `apps/vcstream/qml/qtquickcontrols2.conf`
   - `apps/vcstream/qml/qml.qrc`
 - Platform shim module:
-  - `modules/app/platform/qtshims.h`
-  - `modules/app/platform/qtshims.cpp`
-  - `modules/app/platform/qtshims-dd.txt`
+  - `modules/platform/shim/qtstartupshim.h`
+  - `modules/platform/shim/qtstartupshim-win32.cpp`
+  - `modules/platform/shim/qtstartupshim-other.cpp`
+  - `modules/platform/shim/qtstartupshim-dd.txt`
 - Shim call sites:
   - `apps/vcstream/main.cpp`
   - `apps/unittests/qml/tst_qml_ui.cpp`
@@ -893,6 +894,115 @@ Cleanup
   - `apps/vcstream/qml/PreferencesOverlay.qml`
 - AppSupervisor surface:
   - `modules/app/lifecycle/appsupervisor.h`, `modules/app/lifecycle/appsupervisor.cpp`, `modules/app/lifecycle/appsupervisor-dd.txt`
-- Tests:
+ - Tests:
+   - `apps/unittests/qml/tst_qml_ui.cpp`
+   - `apps/unittests/devices/capture/tst_mediacapture.cpp`
+
+## Maintenance — Platform shims + Linux camera enumeration assist
+
+### What
+
+- Introduced a `modules/platform/shim/` category for narrowly scoped, platform-specific Qt shims.
+- Moved and renamed the Qt startup shim from `modules/app/platform/qtshims.*` to `modules/platform/shim/qtstartupshim.*`.
+  - Split the implementation into one file per platform (`qtstartupshim-win32.cpp` and `qtstartupshim-other.cpp`).
+- Added a new shim module `QtMultimediaRescan` that can request a backend-specific rescan of Qt Multimedia video inputs.
+  - Linux implementation uses Qt Multimedia private headers and invokes the FFmpeg/V4L2 backend's `checkCameras()` slot when available.
+  - Non-Linux builds compile a no-op implementation.
+- Updated `LocalDeviceCatalogue` to be event-driven by default and to run an always-on camera rescan loop (roughly every 2 seconds) when supported.
+  - The loop invokes the backend's `checkCameras()` (via `QtMultimediaRescan`) so Qt can emit `videoInputsChanged` even when `/dev` does not change.
+  - The catalogue refreshes in response to Qt's existing `QMediaDevices::*Changed` signals; it does not poll `videoInputs()` on the timer.
+  - `cameraDiscoveryStatus` remains available for UI diagnostics when the camera list is empty.
+- Added "known devices" memory within the current app session for cameras, microphones, and audio outputs.
+  - Motivation: device lists should not oscillate between "it exists" and "it vanished" in a way that strands the user.
+  - Behaviour:
+    - Devices currently reported by Qt appear first.
+    - Devices that were seen earlier in the same run but are not currently reported remain visible and are labelled "(not available)".
+    - The memory resets on restart (no persistence).
+  - The device maps now include `available` so QML can render and gate actions consistently.
+- Updated camera preview UI surfaces so that "not available" and error states do not silently show stale last frames.
+  - `VideoOutput` hides when the preview handle reports an error.
+  - The placeholder label is shown when the handle is missing or has an error.
+- Added unit tests for the device memory cache.
+- Added polling for capturable window enumeration (about every 2 seconds) so the Windows list updates even though Qt does not provide a reliable change signal.
+  - To avoid UI churn, window title changes are applied on a slower heartbeat (about every 30 seconds) instead of constantly reshuffling the list.
+- Added `for-reference-only/` to `.gitignore` so reference source trees do not pollute `git status`.
+
+### Why
+
+- Qt Multimedia's Linux FFmpeg/V4L2 enumerator can miss virtual cameras (OBS + v4l2loopback) when they have no advertised formats at the time of the initial scan.
+  - If VCStream starts before OBS Virtual Camera, the device may never appear because the backend only re-scans on `/dev` directory changes.
+- A quarantined shim module keeps Qt private-header usage local and reviewable, whilst allowing the rest of the application to remain platform-agnostic.
+- An always-on rescan loop is wasteful but simple and reliable: it avoids requiring every camera-selection surface to trigger a scoped assist, and it handles flows where the user cannot open an inspector because no camera rows exist yet.
+- A short-lived device cache keeps the UI consistent without persisting a long-term machine fingerprint to disk.
+
+### Acceptance criteria
+
+- The project builds and unit tests pass.
+- On Linux: starting OBS Virtual Camera after VCStream can surface the camera without restarting (when the backend exposes `checkCameras()`).
+- On non-Linux: behaviour remains unchanged (no-op rescan shim).
+
+### Current status (hand-off notes)
+
+This task grew into a broader "device list stability" effort.
+The codebase now has background assists for camera enumeration (Linux-only) and best-effort capturable window updates, plus UI changes to keep Sources readable under churn.
+
+The work described in the earlier "Outstanding issues" list has now been addressed.
+
+What is implemented now:
+
+- Camera rescan assist: Linux FFmpeg/V4L2 `checkCameras()` prompt on a 2s cadence (best-effort).
+- Device memory (session-only): cameras/microphones/audio outputs remember previously-seen devices and show them as "(not available)".
+- Window enumeration updates:
+  - Encapsulated in `WindowCaptureWatcher` (polls the capturable window set on a cadence; defers title-only churn).
+  - The public windows list includes stable ids for the process run so UI identity does not depend on list order.
+- Room page Sources list (`apps/vcstream/qml/ShellPage.qml`) stability:
+  - The model is reconciled in-place per section (replace/add, then remove) instead of being cleared and rebuilt.
+  - A horizontal scrollbar is shown when labels overflow, instead of eliding source names.
+  - Horizontal and vertical scrollbars are laid out so they do not overlap.
+- Source inspector title correctness:
+  - The inspector title is built from a raw `titleLabel` field, not from the list's bullet-prefixed label.
+  - Unavailable sources remain marked as "(not available)" in the inspector title until they become available.
+- Crash/segfault investigation support:
+  - Sanitiser instrumentation is enabled by default for Debug builds (off for Release).
+- Style gates:
+  - Added a scan that forbids `break;` and `continue;` inside loops (while allowing `break;` in `switch`).
+
+Notes:
+- Some window title truncation on X11 can still be caused by upstream behaviour (for example WM_NAME vs _NET_WM_NAME). No platform shim workaround is currently implemented.
+- The PipeWire SPA `spaVisitChoice: parse error ...` message was reproduced in a minimal Qt Multimedia audio enumeration scenario, indicating it is emitted upstream rather than by VCStream. A temporary repro tool was used for confirmation and then removed.
+
+### Decisions
+
+- Prefer a new `platform/shim` category over growing `app/*` into a general platform bucket.
+- Keep exactly one platform implementation compiled per module, with a real platform compile guard in each platform source file.
+- Keep Qt Multimedia private-header usage strictly inside `QtMultimediaRescan`.
+
+### Technical notes
+
+- Version bump for this maintenance task:
+  - `CMakeLists.txt`
+- Startup shim module:
+  - `modules/platform/shim/qtstartupshim.h`
+  - `modules/platform/shim/qtstartupshim-win32.cpp`
+  - `modules/platform/shim/qtstartupshim-other.cpp`
+  - `modules/platform/shim/qtstartupshim-dd.txt`
+- Qt Multimedia rescan shim:
+  - `modules/platform/shim/qtmultimediarescan.h`
+  - `modules/platform/shim/qtmultimediarescan-linux.cpp`
+  - `modules/platform/shim/qtmultimediarescan-other.cpp`
+  - `modules/platform/shim/qtmultimediarescan-dd.txt`
+- Device catalogue updates:
+  - `modules/devices/catalogue/localdevicecatalogue.h`
+  - `modules/devices/catalogue/localdevicecatalogue.cpp`
+  - `modules/devices/catalogue/localdevicecatalogue-dd.txt`
+  - `modules/devices/catalogue/devicememorycache.h`
+  - `modules/devices/catalogue/devicememorycache.cpp`
+ - QML wiring:
+   - `apps/vcstream/qml/PreferencesOverlay.qml`
+   - `apps/vcstream/qml/ShellPage.qml`
+- Shim call sites:
+  - `apps/vcstream/main.cpp`
   - `apps/unittests/qml/tst_qml_ui.cpp`
-  - `apps/unittests/devices/capture/tst_mediacapture.cpp`
+  - `apps/fontprobe/main.cpp`
+- Tests:
+  - `apps/unittests/devices/catalogue/tst_devicememorycache.cpp`

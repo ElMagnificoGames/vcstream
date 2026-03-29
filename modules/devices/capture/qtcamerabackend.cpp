@@ -90,21 +90,30 @@ bool findCameraDevice( const QString &deviceId, QCameraDevice *out )
 
 QString QtCameraBackend::descriptionForId( const QString &deviceId ) const
 {
+    QString out;
     QCameraDevice device;
     const bool found = findCameraDevice( deviceId, &device );
-    if ( !found || device.isNull() ) {
-        return QString();
+
+    out = QString();
+
+    if ( found && !device.isNull() ) {
+        out = device.description();
     }
-    return device.description();
+
+    return out;
 }
 
 std::unique_ptr<CameraStreamBackend> QtCameraBackend::createStream( const QString &deviceId, QObject *parent ) const
 {
+    std::unique_ptr<CameraStreamBackend> out;
     QCameraDevice device;
     const bool found = findCameraDevice( deviceId, &device );
-    if ( !found || device.isNull() ) {
-        return nullptr;
+
+    out = nullptr;
+
+    if ( found && !device.isNull() ) {
+        out = std::make_unique<QtCameraStreamBackend>( device, parent );
     }
 
-    return std::make_unique<QtCameraStreamBackend>( device, parent );
+    return out;
 }

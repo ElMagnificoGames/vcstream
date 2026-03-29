@@ -1,0 +1,111 @@
+= QtMultimediaRescan
+
+== Description
+
+I am a platform-specific Qt Multimedia enumeration shim.
+I provide a narrow escape hatch for cases where Qt Multimedia does not reliably emit camera enumeration updates.
+
+I collaborate with `LocalDeviceCatalogue`, which may use me as a bounded discovery assist when a camera appears only after the application has started.
+I do not enumerate devices myself, I do not provide a user-facing refresh button, and I do not become a general-purpose Qt Multimedia private-API wrapper.
+I do not attempt to fix camera capture failures (no frames, device busy, permission issues). That is a separate concern from enumeration.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: stateless.
+- Re-entrancy: re-entrant.
+
+== Public interface
+
+- `bool qtmultimediarescan::requestVideoInputsRescan()` requests a best-effort rescan of video input devices.
+
+- `bool qtmultimediarescan::requestVideoInputsRescan( QString *outDebugText )` is the same operation, but it also provides a short debug message.
+
+  Returns:
+  - `true` when a backend-specific rescan was requested.
+  - `false` when no supported rescan mechanism is available (no-op).
+
+  Errors:
+  - No explicit failure reporting.
+  - Best-effort; may return `true` even if the device list does not change.
+
+=== Debug text expectations
+
+`requestVideoInputsRescan( QString *outDebugText )` returns a short message intended for diagnostics.
+
+- Some messages represent permanent limitations:
+  - "Camera rescan unavailable on this platform."
+  - "Camera rescan unavailable: Qt Multimedia private headers not available at build time."
+
+- Some messages represent transient state (things that may become available later in the same process):
+  - "Camera rescan unavailable: Qt Multimedia integration not initialised."
+
+Callers may choose to treat permanent limitations as user-visible diagnostics, and treat transient messages as debug-only.
+
+== Implementation details
+
+=== Motivation and background
+
+On some Linux setups, virtual cameras (for example OBS + v4l2loopback) can behave like this:
+
+- A `/dev/video*` node exists even when the virtual camera is "off".
+- When the virtual camera is "off", that node can report no supported formats.
+- When the virtual camera is "on", formats appear.
+
+Qt Multimedia's FFmpeg/V4L2 camera enumerator can skip a camera device if it reports no formats at scan time.
+Qt also tends to re-scan cameras only when it notices `/dev` directory entries change (add/remove/rename).
+If OBS toggling does not change the `/dev/video*` entry on your machine, Qt may never re-scan, which means:
+
+- `QMediaDevices::videoInputsChanged` is never emitted.
+- `QMediaDevices::videoInputs()` keeps returning the same snapshot.
+- The user can start OBS Virtual Camera after vcstream starts and the camera never appears.
+
+This shim exists to provide a narrow way to "prompt" Qt to re-check camera formats so the normal Qt signal path can fire.
+
+=== Linux
+
+- When Qt is using the FFmpeg backend with V4L2 camera enumeration, virtual cameras (for example OBS + v4l2loopback) may have no advertised formats until a producer starts.
+- Qt's V4L2 enumerator skips devices with no formats at scan time, and it only re-scans on `/dev` directory changes.
+- Workaround: invoke the backend's `checkCameras()` slot via Qt metaobject APIs. This forces a re-probe of camera formats and allows devices to appear without restarting the app.
+- This implementation uses Qt Multimedia private headers and is intentionally quarantined to this module.
+
+=== Non-Linux
+
+- No-op.
+
+=== When this helps (and when it does not)
+
+This helps when:
+
+- The camera device exists but becomes enumerable only after something starts producing formats.
+- Qt does not notice the change because `/dev` does not change.
+
+This does not help when:
+
+- The camera is already enumerable but capture fails (no frames, permission denied, device busy).
+- The camera disappears at the capture level without changing enumeration.
+- The underlying backend does not have a `checkCameras()` slot, or Qt Multimedia is not using a V4L2-based enumerator.
+
+In those cases the correct fix is capture liveness and error reporting (for example surfacing QCamera errors and "no frames" watchdogs), not enumeration rescans.
+
+=== Build-time caveats
+
+This module deliberately touches Qt Multimedia private API on Linux.
+That has practical consequences:
+
+- Private headers are not guaranteed to be installed by default.
+- Even when they are installed, the include paths can vary by distribution.
+
+On this workspace, the private headers were not discoverable via `<QtMultimedia/private/...>` includes even when Qt Multimedia Private support was present.
+To keep the build working, the Linux implementation contains a fallback that uses an absolute include path for a Debian-style versioned layout (for example `.../QtMultimedia/6.10.2/...`).
+
+This fallback is intentionally ugly but localised:
+
+- It keeps the rest of the codebase free of private-API include hacks.
+- It makes it obvious where to edit if the distribution or Qt version changes.
+
+If the private headers are not available at build time, the Linux implementation compiles in a supported no-op mode and reports that in `outDebugText`.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.

@@ -25,38 +25,33 @@ void appendf( char *buffer, const std::size_t capacity, std::size_t *pos, const 
     int written;
     std::size_t remaining;
     std::size_t toAdvance;
+    bool canAppend;
 
-    if ( buffer == nullptr || pos == nullptr || fmt == nullptr ) {
-        return;
+    canAppend = ( buffer != nullptr && pos != nullptr && fmt != nullptr && capacity > 0 );
+
+    if ( canAppend ) {
+        if ( *pos >= capacity ) {
+            buffer[ capacity - 1 ] = '\0';
+        } else {
+            remaining = capacity - *pos;
+
+            va_start( args, fmt );
+            written = std::vsnprintf( buffer + *pos, remaining, fmt, args );
+            va_end( args );
+
+            if ( written < 0 ) {
+                buffer[ capacity - 1 ] = '\0';
+            } else {
+                if ( static_cast<std::size_t>( written ) >= remaining ) {
+                    toAdvance = remaining - 1;
+                } else {
+                    toAdvance = static_cast<std::size_t>( written );
+                }
+
+                *pos += toAdvance;
+            }
+        }
     }
-
-    if ( capacity == 0 ) {
-        return;
-    }
-
-    if ( *pos >= capacity ) {
-        buffer[ capacity - 1 ] = '\0';
-        return;
-    }
-
-    remaining = capacity - *pos;
-
-    va_start( args, fmt );
-    written = std::vsnprintf( buffer + *pos, remaining, fmt, args );
-    va_end( args );
-
-    if ( written < 0 ) {
-        buffer[ capacity - 1 ] = '\0';
-        return;
-    }
-
-    if ( static_cast<std::size_t>( written ) >= remaining ) {
-        toAdvance = remaining - 1;
-    } else {
-        toAdvance = static_cast<std::size_t>( written );
-    }
-
-    *pos += toAdvance;
 }
 
 void terminateHandler() noexcept

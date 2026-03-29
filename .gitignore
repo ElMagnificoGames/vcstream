@@ -13,3 +13,6 @@
 # IDE/editor
 /.vscode/
 /.idea/
+
+# read-only source code for reference, e.g. QT 6.11.0
+/for-reference-only/

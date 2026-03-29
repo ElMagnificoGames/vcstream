@@ -10,3 +10,5 @@ target_link_libraries( tst_crashguard PRIVATE
 )
 
 add_test( NAME tst_crashguard COMMAND tst_crashguard )
+
+vcstream_apply_default_test_environment( tst_crashguard )

@@ -31,6 +31,29 @@ cmake --build build
 ./build/bin/vcstream
 ```
 
+## Environment variables
+
+These are the environment variables that VCStream code reads and/or sets.
+
+- `VCSTREAM_DEBUG_FAKE_MEDIA_ENUM`
+  - Purpose: debugging/CI switch to replace local device enumeration with deterministic fake device lists.
+  - Values: treated as enabled when set to `1`, `true`, or `yes`.
+  - Effect: `LocalDeviceCatalogue` updates its QML-facing device lists on a short cadence (about every 10ms) to help reproduce UI instability and memory-corruption bugs.
+  - Notes: the fake generator uses `VCSTREAM_DEBUG_TEST_SEED` for determinism.
+
+- `VCSTREAM_DEBUG_TEST_SEED`
+  - Purpose: debugging/CI switch for deterministic unit-test randomness.
+  - Values: integer parsed with base-0 rules (so decimal and `0x...` hex both work).
+  - Scope: unit tests only.
+
+- `QT_QPA_FONTDIR`
+  - Purpose: Qt platform font discovery hint (Qt-owned environment variable).
+  - VCStream behaviour (Windows): if unset, `QtStartupShim` sets it to `%WINDIR%\Fonts` (or `C:\Windows\Fonts`) when that directory exists.
+
+- `WINDIR`
+  - Purpose: Windows system root path (Windows-owned environment variable).
+  - VCStream usage (Windows): used only to derive `%WINDIR%\Fonts` for `QT_QPA_FONTDIR`; if missing, VCStream falls back to `C:\Windows`.
+
 ### Warnings policy (CMake)
 
 Strict warnings are centralised in the root `CMakeLists.txt` as the INTERFACE target `vcstream_warnings` (`/W4 /WX` on MSVC; `-Wall -Wextra -Wpedantic -Wconversion -Werror` elsewhere).

@@ -45,41 +45,35 @@ public:
 
     void addViewSink( QVideoSink *sink )
     {
-        if ( sink == nullptr ) {
-            return;
-        }
+        if ( sink != nullptr ) {
+            if ( !m_viewSinks.contains( sink ) ) {
+                m_viewSinks.append( sink );
 
-        if ( !m_viewSinks.contains( sink ) ) {
-            m_viewSinks.append( sink );
-
-            if ( m_lastFrame.isValid() ) {
-                sink->setVideoFrame( m_lastFrame );
+                if ( m_lastFrame.isValid() ) {
+                    sink->setVideoFrame( m_lastFrame );
+                }
             }
         }
     }
 
     void removeViewSink( QVideoSink *sink )
     {
-        if ( sink == nullptr ) {
-            return;
+        if ( sink != nullptr ) {
+            m_viewSinks.removeAll( sink );
         }
-
-        m_viewSinks.removeAll( sink );
     }
 
     void setActive( const bool active )
     {
-        if ( m_active == active ) {
-            return;
-        }
+        if ( m_active != active ) {
+            m_active = active;
 
-        m_active = active;
-
-        if ( m_active ) {
-            m_backend->start();
-        } else {
-            m_backend->stop();
-            m_lastFrame = QVideoFrame();
+            if ( m_active ) {
+                m_backend->start();
+            } else {
+                m_backend->stop();
+                m_lastFrame = QVideoFrame();
+            }
         }
     }
 
@@ -162,15 +156,13 @@ QObject *MediaCapture::acquireCameraPreviewHandle( const QString &deviceId, QObj
         resolvedOwner = this;
     }
 
-    if ( deviceId.isEmpty() ) {
-        return out;
+    if ( !deviceId.isEmpty() ) {
+        CameraPreviewHandle *handle;
+
+        handle = new CameraPreviewHandle( *this, deviceId, resolvedOwner );
+        handle->setDescription( cameraDescriptionForId( deviceId ) );
+        out = handle;
     }
-
-    CameraPreviewHandle *handle;
-
-    handle = new CameraPreviewHandle( *this, deviceId, resolvedOwner );
-    handle->setDescription( cameraDescriptionForId( deviceId ) );
-    out = handle;
 
     return out;
 }
@@ -193,19 +185,17 @@ int MediaCapture::activeCameraCount() const
 
 void MediaCapture::registerViewSink( CameraPreviewHandle &handle )
 {
-    if ( handle.viewSink() == nullptr ) {
-        return;
-    }
+    if ( handle.viewSink() != nullptr ) {
+        CameraStream *stream;
 
-    CameraStream *stream;
-    stream = ensureStreamForDeviceId( handle.deviceId() );
-    if ( stream == nullptr ) {
-        handle.setErrorText( QStringLiteral( "Camera device is not available." ) );
-        return;
+        stream = ensureStreamForDeviceId( handle.deviceId() );
+        if ( stream != nullptr ) {
+            stream->addViewSink( handle.viewSink() );
+            handle.m_registered = true;
+        } else {
+            handle.setErrorText( QStringLiteral( "Camera device is not available." ) );
+        }
     }
-
-    stream->addViewSink( handle.viewSink() );
-    handle.m_registered = true;
 }
 
 void MediaCapture::unregisterViewSink( CameraPreviewHandle &handle )
@@ -213,20 +203,18 @@ void MediaCapture::unregisterViewSink( CameraPreviewHandle &handle )
     CameraStream *stream;
 
     stream = m_cameraStreams.value( handle.deviceId(), nullptr );
-    if ( stream == nullptr ) {
-        return;
-    }
+    if ( stream != nullptr ) {
+        if ( handle.viewSink() != nullptr ) {
+            stream->removeViewSink( handle.viewSink() );
+        }
+        handle.m_registered = false;
 
-    if ( handle.viewSink() != nullptr ) {
-        stream->removeViewSink( handle.viewSink() );
-    }
-    handle.m_registered = false;
-
-    if ( stream->isUnused() ) {
-        m_cameraStreams.remove( handle.deviceId() );
-        stream->setActive( false );
-        stream->deleteLater();
-        Q_EMIT activeCameraCountChanged();
+        if ( stream->isUnused() ) {
+            m_cameraStreams.remove( handle.deviceId() );
+            stream->setActive( false );
+            stream->deleteLater();
+            Q_EMIT activeCameraCountChanged();
+        }
     }
 }
 
@@ -242,31 +230,34 @@ void MediaCapture::setHandleRunning( CameraPreviewHandle &handle, const bool run
         stream = m_cameraStreams.value( handle.deviceId(), nullptr );
     }
 
-    if ( stream == nullptr ) {
+    if ( stream != nullptr ) {
+        stream->incrementRunningRefCount( running ? 1 : -1 );
+        stream->setActive( stream->runningRefCount() > 0 );
+
+        if ( stream->isUnused() ) {
+            m_cameraStreams.remove( handle.deviceId() );
+            stream->setActive( false );
+            stream->deleteLater();
+            Q_EMIT activeCameraCountChanged();
+        }
+    } else {
         if ( running ) {
             handle.setErrorText( QStringLiteral( "Camera device is not available." ) );
         }
-        return;
-    }
-
-    stream->incrementRunningRefCount( running ? 1 : -1 );
-    stream->setActive( stream->runningRefCount() > 0 );
-
-    if ( stream->isUnused() ) {
-        m_cameraStreams.remove( handle.deviceId() );
-        stream->setActive( false );
-        stream->deleteLater();
-        Q_EMIT activeCameraCountChanged();
     }
 }
 
 QString MediaCapture::cameraDescriptionForId( const QString &deviceId ) const
 {
-    if ( deviceId.isEmpty() ) {
-        return QString();
+    QString out;
+
+    out = QString();
+
+    if ( !deviceId.isEmpty() ) {
+        out = m_cameraBackend->descriptionForId( deviceId );
     }
 
-    return m_cameraBackend->descriptionForId( deviceId );
+    return out;
 }
 
 MediaCapture::CameraStream *MediaCapture::ensureStreamForDeviceId( const QString &deviceId )
@@ -275,34 +266,30 @@ MediaCapture::CameraStream *MediaCapture::ensureStreamForDeviceId( const QString
 
     out = nullptr;
 
-    if ( deviceId.isEmpty() ) {
-        return out;
+    if ( !deviceId.isEmpty() ) {
+        if ( m_cameraStreams.contains( deviceId ) ) {
+            out = m_cameraStreams.value( deviceId );
+        } else {
+            std::unique_ptr<CameraStreamBackend> backend = m_cameraBackend->createStream( deviceId, nullptr );
+            if ( backend != nullptr ) {
+                CameraStreamBackend *backendRaw;
+                backendRaw = backend.release();
+                backendRaw->setParent( this );
+
+                const QString description = m_cameraBackend->descriptionForId( deviceId );
+                CameraStream *stream;
+
+                stream = new CameraStream( deviceId, description, *backendRaw, this );
+                backendRaw->setParent( stream );
+
+                m_cameraStreams.insert( deviceId, stream );
+                Q_EMIT activeCameraCountChanged();
+
+                out = stream;
+            }
+        }
     }
 
-    if ( m_cameraStreams.contains( deviceId ) ) {
-        out = m_cameraStreams.value( deviceId );
-        return out;
-    }
-
-    std::unique_ptr<CameraStreamBackend> backend = m_cameraBackend->createStream( deviceId, nullptr );
-    if ( backend == nullptr ) {
-        return out;
-    }
-
-    CameraStreamBackend *backendRaw;
-    backendRaw = backend.release();
-    backendRaw->setParent( this );
-
-    const QString description = m_cameraBackend->descriptionForId( deviceId );
-    CameraStream *stream;
-
-    stream = new CameraStream( deviceId, description, *backendRaw, this );
-    backendRaw->setParent( stream );
-
-    m_cameraStreams.insert( deviceId, stream );
-    Q_EMIT activeCameraCountChanged();
-
-    out = stream;
     return out;
 }
 

@@ -90,31 +90,35 @@ void FontPreviewSafetyCache::requestCheck( const QString &family, const int pixe
     bool shouldStart;
     Status emitStatus;
     bool shouldEmit;
+    bool eligible;
 
     shouldStart = false;
     emitStatus = Status::NeverChecked;
     shouldEmit = false;
+    eligible = false;
 
     {
         const QMutexLocker lock( &m_mutex );
         const Key k = makeKey( family, pixelSize );
         const Status current = m_status.value( k, Status::NeverChecked );
 
-        if ( current == Status::Safe || current == Status::Bad || current == Status::Checking || current == Status::TimedOut ) {
-            return;
+        if ( current != Status::Safe && current != Status::Bad && current != Status::Checking && current != Status::TimedOut ) {
+            eligible = true;
         }
 
-        if ( m_stuckChecks >= m_config.maxStuckChecks ) {
-            if ( current != Status::Blocked ) {
-                m_status.insert( k, Status::Blocked );
-                emitStatus = Status::Blocked;
+        if ( eligible ) {
+            if ( m_stuckChecks >= m_config.maxStuckChecks ) {
+                if ( current != Status::Blocked ) {
+                    m_status.insert( k, Status::Blocked );
+                    emitStatus = Status::Blocked;
+                    shouldEmit = true;
+                }
+            } else {
+                m_status.insert( k, Status::Checking );
+                shouldStart = true;
+                emitStatus = Status::Checking;
                 shouldEmit = true;
             }
-        } else {
-            m_status.insert( k, Status::Checking );
-            shouldStart = true;
-            emitStatus = Status::Checking;
-            shouldEmit = true;
         }
     }
 
@@ -137,18 +141,16 @@ void FontPreviewSafetyCache::onCheckTimedOut( const QString &family, const int p
         const QMutexLocker lock( &m_mutex );
         const Key k = makeKey( family, pixelSize );
         const Status current = m_status.value( k, Status::NeverChecked );
-        if ( current != Status::Checking ) {
-            return;
+        if ( current == Status::Checking ) {
+            m_status.insert( k, Status::TimedOut );
+
+            if ( !m_countedStuck.value( k, false ) ) {
+                m_countedStuck.insert( k, true );
+                ++m_stuckChecks;
+            }
+
+            shouldEmit = true;
         }
-
-        m_status.insert( k, Status::TimedOut );
-
-        if ( !m_countedStuck.value( k, false ) ) {
-            m_countedStuck.insert( k, true );
-            ++m_stuckChecks;
-        }
-
-        shouldEmit = true;
     }
 
     if ( shouldEmit ) {
@@ -170,19 +172,17 @@ void FontPreviewSafetyCache::onCheckFinished( const QString &family, const int p
         const Key k = makeKey( family, pixelSize );
         const Status current = m_status.value( k, Status::NeverChecked );
 
-        if ( current != Status::Checking && current != Status::TimedOut ) {
-            return;
+        if ( current == Status::Checking || current == Status::TimedOut ) {
+            m_status.insert( k, next );
+            shouldEmit = true;
+
+            countedStuck = m_countedStuck.value( k, false );
+            if ( countedStuck && m_stuckChecks > 0 ) {
+                --m_stuckChecks;
+            }
+
+            m_countedStuck.remove( k );
         }
-
-        m_status.insert( k, next );
-        shouldEmit = true;
-
-        countedStuck = m_countedStuck.value( k, false );
-        if ( countedStuck && m_stuckChecks > 0 ) {
-            --m_stuckChecks;
-        }
-
-        m_countedStuck.remove( k );
     }
 
     if ( shouldEmit ) {
