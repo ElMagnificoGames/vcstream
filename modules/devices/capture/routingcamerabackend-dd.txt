@@ -1,0 +1,32 @@
+= RoutingCameraBackend
+
+== Description
+
+I am a camera backend router.
+I choose an underlying camera backend based on the device id prefix.
+
+I collaborate with `MediaCapture`, which uses me on Windows to support multiple camera backends.
+I do not enumerate devices and I do not implement capture myself; I only delegate.
+
+State model:
+- Thread affinity: UI thread.
+- Lifetime/ownership: owned by `MediaCapture`.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `QString descriptionForId( const QString &deviceId ) const` delegates to the selected backend.
+- `std::unique_ptr<CameraStreamBackend> createStream( const QString &deviceId, QObject *parent ) const` delegates to the selected backend.
+
+== Routing rules
+
+- `dshow:` prefix routes to the DirectShow backend when configured.
+- All other ids route to the Qt Multimedia backend.
+
+Notes:
+- Routing is based on string prefix only; callers should avoid ambiguous ids.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x.

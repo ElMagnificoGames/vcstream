@@ -2,6 +2,7 @@
 
 #include "modules/devices/catalogue/fakedevicenamegenerator.h"
 #include "modules/platform/shim/qtmultimediarescan.h"
+#include "modules/platform/shim/dshowcameraenum.h"
 
 #include <algorithm>
 
@@ -151,6 +152,7 @@ LocalDeviceCatalogue::LocalDeviceCatalogue( QObject *parent )
             // Proactively ask the backend to re-check video inputs on a bounded
             // cadence so `videoInputsChanged` can fire when the camera becomes
             // enumerable.
+#if defined( Q_OS_LINUX )
             m_videoInputsRescanTimer = new QTimer( this );
             m_videoInputsRescanTimer->setInterval( 2000 );
             QObject::connect( m_videoInputsRescanTimer, &QTimer::timeout, this, &LocalDeviceCatalogue::onVideoInputsRescanTick );
@@ -168,6 +170,7 @@ LocalDeviceCatalogue::LocalDeviceCatalogue( QObject *parent )
             if ( !m_videoInputsRescanSupported && isVideoInputsRescanPermanentlyUnsupported( m_videoInputsRescanDebugText ) ) {
                 setCameraDiscoveryStatus( m_videoInputsRescanDebugText );
             }
+#endif
 
             ensureWindowWatcherIfNeeded();
         }
@@ -447,6 +450,7 @@ void LocalDeviceCatalogue::refresh()
 
             QList<DeviceMemoryCache::DeviceInfo> snapshot;
             QSet<QString> snapshotIds;
+            QSet<QString> qtNameKeys;
 
             for ( const QCameraDevice &d : cameraList ) {
                 const QString id = idToStableString( d.id() );
@@ -457,6 +461,31 @@ void LocalDeviceCatalogue::refresh()
                 info.isDefault = ( d == defaultCamera );
                 snapshot.append( info );
                 snapshotIds.insert( id );
+
+                if ( !info.name.isEmpty() ) {
+                    qtNameKeys.insert( info.name.toCaseFolded() );
+                }
+            }
+
+            // On Windows, some virtual cameras are exposed through DirectShow but do not
+            // appear in Qt Multimedia's `QMediaDevices::videoInputs()`.
+            {
+                QString dshowDebug;
+                const QVector<dshowcameraenum::VideoInput> dshowInputs = dshowcameraenum::enumerateVideoInputs( &dshowDebug );
+
+                for ( const dshowcameraenum::VideoInput &v : dshowInputs ) {
+                    if ( !v.stableId.isEmpty() && !v.name.isEmpty() ) {
+                        const QString nameKey = v.name.toCaseFolded();
+                        if ( !qtNameKeys.contains( nameKey ) ) {
+                            DeviceMemoryCache::DeviceInfo info;
+                            info.id = v.stableId;
+                            info.name = v.name;
+                            info.isDefault = false;
+                            snapshot.append( info );
+                            snapshotIds.insert( info.id );
+                        }
+                    }
+                }
             }
 
             std::sort( snapshot.begin(), snapshot.end(), deviceInfoLessByNameThenId );
@@ -476,6 +505,9 @@ void LocalDeviceCatalogue::refresh()
             setCameras( cameras );
         }
 
+        // The rescan shim is a Linux-specific workaround; on other platforms its
+        // "unavailable" status is expected and not user-actionable.
+#if defined( Q_OS_LINUX )
         // Treat cameraDiscoveryStatus as a capability/diagnostic indicator rather
         // than an empty-state message. When the rescan mechanism is permanently
         // unavailable, surface it even if cameras exist.
@@ -484,6 +516,9 @@ void LocalDeviceCatalogue::refresh()
         } else {
             setCameraDiscoveryStatus( QString() );
         }
+#else
+        setCameraDiscoveryStatus( QString() );
+#endif
 
         {
             QVariantList microphones;
@@ -576,6 +611,11 @@ void LocalDeviceCatalogue::onVideoInputsRescanTick()
         if ( mediaEnumerationFaked() ) {
             m_videoInputsRescanTimer->stop();
         } else {
+#if !defined( Q_OS_LINUX )
+            // The rescan shim is a Linux-specific workaround.
+            m_videoInputsRescanTimer->stop();
+            setCameraDiscoveryStatus( QString() );
+#else
             // This is best-effort. When the backend detects a change, Qt will emit
             // `QMediaDevices::videoInputsChanged`, and our signal wiring will refresh
             // the QML-facing catalogue.
@@ -592,6 +632,7 @@ void LocalDeviceCatalogue::onVideoInputsRescanTick()
                     setCameraDiscoveryStatus( m_videoInputsRescanDebugText );
                 }
             }
+#endif
         }
     }
 }

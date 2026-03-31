@@ -4,6 +4,8 @@
 #include "modules/devices/capture/camerapreviewhandle.h"
 #include "modules/devices/capture/camerastreambackend.h"
 #include "modules/devices/capture/qtcamerabackend.h"
+#include "modules/devices/capture/routingcamerabackend.h"
+#include "modules/devices/capture/dshowcamerabackend.h"
 
 #include <QList>
 #include <QPointer>
@@ -26,11 +28,17 @@ public:
         , m_description( description )
         , m_backend( &backend )
         , m_lastFrame()
+        , m_errorText()
+        , m_framesReceived( 0 )
         , m_runningRefCount( 0 )
         , m_active( false )
         , m_viewSinks()
+        , m_handles()
     {
         QObject::connect( m_backend, &CameraStreamBackend::videoFrameChanged, this, &CameraStream::onVideoFrameChanged );
+        QObject::connect( m_backend, &CameraStreamBackend::errorTextChanged, this, &CameraStream::onBackendErrorTextChanged );
+
+        m_errorText = m_backend->errorText();
     }
 
     QString deviceId() const
@@ -73,8 +81,43 @@ public:
             } else {
                 m_backend->stop();
                 m_lastFrame = QVideoFrame();
+                m_framesReceived = 0;
+
+                for ( const QPointer<QVideoSink> &sink : m_viewSinks ) {
+                    if ( sink != nullptr ) {
+                        sink->setVideoFrame( QVideoFrame() );
+                    }
+                }
+
+                for ( const QPointer<CameraPreviewHandle> &h : m_handles ) {
+                    if ( h != nullptr ) {
+                        h->setHasFrame( false );
+                        h->setFramesReceived( m_framesReceived );
+                    }
+                }
             }
         }
+    }
+
+    QString errorText() const
+    {
+        return m_errorText;
+    }
+
+    void addHandle( CameraPreviewHandle &handle )
+    {
+        if ( !m_handles.contains( &handle ) ) {
+            m_handles.append( &handle );
+        }
+
+        handle.setErrorText( m_errorText );
+        handle.setHasFrame( m_lastFrame.isValid() );
+        handle.setFramesReceived( m_framesReceived );
+    }
+
+    void removeHandle( CameraPreviewHandle &handle )
+    {
+        m_handles.removeAll( &handle );
     }
 
     int runningRefCount() const
@@ -104,6 +147,20 @@ private Q_SLOTS:
     void onVideoFrameChanged( const QVideoFrame &frame )
     {
         m_lastFrame = frame;
+        m_framesReceived += 1;
+
+        QList<QPointer<CameraPreviewHandle>> remainingHandles;
+        remainingHandles.reserve( m_handles.size() );
+
+        for ( const QPointer<CameraPreviewHandle> &h : m_handles ) {
+            if ( h != nullptr ) {
+                h->setHasFrame( true );
+                h->setFramesReceived( m_framesReceived );
+                remainingHandles.append( h );
+            }
+        }
+
+        m_handles = remainingHandles;
 
         QList<QPointer<QVideoSink>> remaining;
         remaining.reserve( m_viewSinks.size() );
@@ -118,19 +175,58 @@ private Q_SLOTS:
         m_viewSinks = remaining;
     }
 
+    void onBackendErrorTextChanged()
+    {
+        const QString next = m_backend->errorText();
+        if ( m_errorText != next ) {
+            m_errorText = next;
+
+            QList<QPointer<CameraPreviewHandle>> remaining;
+            remaining.reserve( m_handles.size() );
+
+            for ( const QPointer<CameraPreviewHandle> &h : m_handles ) {
+                if ( h != nullptr ) {
+                    h->setErrorText( m_errorText );
+                    remaining.append( h );
+                }
+            }
+
+            m_handles = remaining;
+
+            if ( !m_errorText.isEmpty() ) {
+                for ( const QPointer<QVideoSink> &sink : m_viewSinks ) {
+                    if ( sink != nullptr ) {
+                        sink->setVideoFrame( QVideoFrame() );
+                    }
+                }
+            }
+        }
+    }
+
 private:
     const QString m_deviceId;
     const QString m_description;
     CameraStreamBackend *m_backend;
 
     QVideoFrame m_lastFrame;
+    QString m_errorText;
+    int m_framesReceived;
     int m_runningRefCount;
     bool m_active;
     QList<QPointer<QVideoSink>> m_viewSinks;
+    QList<QPointer<CameraPreviewHandle>> m_handles;
 };
 
 MediaCapture::MediaCapture( QObject *parent )
+#if defined( Q_OS_WIN )
+    : MediaCapture(
+          std::make_unique<RoutingCameraBackend>(
+              std::make_unique<QtCameraBackend>(),
+              std::make_unique<DShowCameraBackend>() ),
+          parent )
+#else
     : MediaCapture( std::make_unique<QtCameraBackend>(), parent )
+#endif
 {
 }
 
@@ -190,6 +286,7 @@ void MediaCapture::registerViewSink( CameraPreviewHandle &handle )
 
         stream = ensureStreamForDeviceId( handle.deviceId() );
         if ( stream != nullptr ) {
+            stream->addHandle( handle );
             stream->addViewSink( handle.viewSink() );
             handle.m_registered = true;
         } else {
@@ -207,6 +304,7 @@ void MediaCapture::unregisterViewSink( CameraPreviewHandle &handle )
         if ( handle.viewSink() != nullptr ) {
             stream->removeViewSink( handle.viewSink() );
         }
+        stream->removeHandle( handle );
         handle.m_registered = false;
 
         if ( stream->isUnused() ) {

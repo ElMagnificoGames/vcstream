@@ -29,3 +29,24 @@ Example:
 ```sh
 ./build/bin/vcstream_fontprobe --family "Noto Sans"
 ```
+
+## vcstream_cameraprobe
+
+`vcstream_cameraprobe` is a camera diagnostics tool used to investigate camera enumeration and preview capture issues.
+
+- Target: `vcstream_cameraprobe`
+- Source: `apps/cameraprobe/`
+
+It prints:
+
+- Qt Multimedia camera enumeration
+- Windows DirectShow camera enumeration (when available)
+
+It can also attempt to start capture for the first available camera to confirm whether frames are arriving.
+
+Examples:
+
+```sh
+./build/bin/vcstream_cameraprobe
+./build/bin/vcstream_cameraprobe --capture-first
+```

@@ -1,0 +1,29 @@
+# Normalise line endings.
+#
+# The repository stores text files with LF line endings. On Windows, Git can
+# check out CRLF depending on user configuration; enforce LF for source and
+# documentation files to keep diffs and reviews stable.
+
+* text=auto
+
+# CMake
+CMakeLists.txt text eol=lf
+*.cmake text eol=lf
+
+# C/C++
+*.h text eol=lf
+*.hpp text eol=lf
+*.cpp text eol=lf
+*.c text eol=lf
+
+# QML/Qt resources
+*.qml text eol=lf
+*.qrc text eol=lf
+*.conf text eol=lf
+
+# Docs
+*.md text eol=lf
+*.txt text eol=lf
+
+# Keep Windows batch scripts as CRLF.
+*.bat text eol=crlf

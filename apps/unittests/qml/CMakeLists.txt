@@ -18,9 +18,13 @@ target_link_libraries( tst_qml_ui PRIVATE
     vcstream_ui_placement
     vcstream_ui_colour
     vcstream_ui_theme
+    vcstream_ui_video
 )
 
-add_test( NAME tst_qml_ui COMMAND tst_qml_ui )
+add_test( NAME tst_qml_ui
+    COMMAND tst_qml_ui
+        -o "${CMAKE_BINARY_DIR}/Testing/Temporary/tst_qml_ui.log,txt"
+)
 
 vcstream_apply_default_test_environment( tst_qml_ui )
 

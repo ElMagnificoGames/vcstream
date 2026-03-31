@@ -1004,5 +1004,66 @@ Notes:
   - `apps/vcstream/main.cpp`
   - `apps/unittests/qml/tst_qml_ui.cpp`
   - `apps/fontprobe/main.cpp`
-- Tests:
+  - Tests:
   - `apps/unittests/devices/catalogue/tst_devicememorycache.cpp`
+
+## Maintenance — Windows DirectShow virtual camera support
+
+### What
+
+- Added a Windows-specific DirectShow camera enumerator shim (`DShowCameraEnum`) and merged its results into the camera list exposed by `LocalDeviceCatalogue`.
+  - This surfaces DirectShow-only virtual cameras (for example OBS Virtual Camera and VTubeStudioCam) that do not appear in Windows' built-in Camera app and may not be enumerated by Qt Multimedia.
+  - Best-effort de-duplication is performed against the Qt Multimedia camera list by friendly name (case-insensitive) to reduce duplicate entries when a device is visible via both paths.
+- Implemented a Windows DirectShow capture backend (`DShowCameraBackend`) and introduced a routing backend (`RoutingCameraBackend`) so `MediaCapture` can open either:
+  - Qt Multimedia cameras (existing behaviour), or
+  - DirectShow-only cameras using stable `dshow:` ids.
+- Updated the `vcstream_cameraprobe` developer tool to print both Qt Multimedia camera enumeration and DirectShow camera enumeration, and added `--capture-first` to confirm frame delivery for the first available device.
+- Tightened `cameraDiscoveryStatus` semantics so the Linux-only rescan shim does not emit an always-on "unavailable" message on Windows (it was not actionable and was being shown in Preferences).
+
+- Added a Windows compatibility preference to force Qt Quick into software rendering.
+  - The preference is persisted in `AppPreferences` and applied at startup (before `QGuiApplication` is constructed).
+  - This provides an escape hatch for graphics driver issues and some screen-capture/remote-desktop scenarios.
+
+### Why
+
+- Some popular Windows virtual cameras are exposed via DirectShow but not Media Foundation.
+  - They are often visible in conferencing apps (Zoom/Teams/Discord) but not in the Windows Camera app.
+  - Qt Multimedia's Windows camera enumeration can return an empty camera list in this scenario, making VCStream appear to have no cameras.
+- Supporting DirectShow camera capture allows VCStream to provide camera preview and camera sources on these systems without requiring users to switch to a different virtual camera driver.
+
+### Acceptance criteria
+
+- On Windows, DirectShow-only virtual cameras appear in VCStream's device lists.
+- Selecting a DirectShow camera for preview produces frames (the preview is functional).
+- Existing Qt Multimedia camera behaviour remains unchanged.
+- The project builds and unit tests pass with the strict style gates.
+
+### Decisions
+
+- Stable ids: represent DirectShow devices as `dshow:<hex>` where `<hex>` is the UTF-8 hex encoding of the moniker display name. This allows capture to re-open the exact device without relying on fragile index ordering.
+- De-duplication: when both Qt Multimedia and DirectShow enumerate a camera with the same friendly name, prefer the Qt Multimedia entry.
+- Capture implementation: use a DirectShow filter graph with the legacy Sample Grabber to receive frames, converting to `QVideoFrame( QImage )`.
+
+### Technical notes
+
+- DirectShow enumeration shim:
+  - `modules/platform/shim/dshowcameraenum.h`
+  - `modules/platform/shim/dshowcameraenum-win32.cpp`
+  - `modules/platform/shim/dshowcameraenum-other.cpp`
+  - `modules/platform/shim/dshowcameraenum-dd.txt`
+- Device catalogue merge:
+  - `modules/devices/catalogue/localdevicecatalogue.cpp`
+  - `modules/devices/catalogue/CMakeLists.txt`
+- Capture backends:
+  - `modules/devices/capture/dshowcamerabackend.h`
+  - `modules/devices/capture/dshowcamerabackend-win32.cpp`
+  - `modules/devices/capture/dshowcamerabackend-other.cpp`
+  - `modules/devices/capture/dshowcamerabackend-dd.txt`
+  - `modules/devices/capture/routingcamerabackend.h`
+  - `modules/devices/capture/routingcamerabackend.cpp`
+  - `modules/devices/capture/routingcamerabackend-dd.txt`
+  - `modules/devices/capture/mediacapture.cpp`
+  - `modules/devices/capture/CMakeLists.txt`
+- Cameraprobe tool:
+  - `apps/cameraprobe/main.cpp`
+  - `apps/cameraprobe/CMakeLists.txt`

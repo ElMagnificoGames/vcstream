@@ -18,6 +18,8 @@ class AppPreferences final : public QObject
     Q_PROPERTY( double customAccentLightness READ customAccentLightness WRITE setCustomAccentLightness NOTIFY customAccentLightnessChanged )
     Q_PROPERTY( double customAccentChroma READ customAccentChroma WRITE setCustomAccentChroma NOTIFY customAccentChromaChanged )
     Q_PROPERTY( double customAccentHueDegrees READ customAccentHueDegrees WRITE setCustomAccentHueDegrees NOTIFY customAccentHueDegreesChanged )
+    Q_PROPERTY( bool softwareRenderingEnabled READ softwareRenderingEnabled WRITE setSoftwareRenderingEnabled NOTIFY softwareRenderingEnabledChanged )
+    Q_PROPERTY( bool softwareRenderingActive READ softwareRenderingActive CONSTANT )
 
 public:
     explicit AppPreferences( QObject *parent = nullptr );
@@ -55,6 +57,11 @@ public:
     double customAccentHueDegrees() const;
     void setCustomAccentHueDegrees( double hueDegrees );
 
+    bool softwareRenderingEnabled() const;
+    void setSoftwareRenderingEnabled( bool enabled );
+
+    bool softwareRenderingActive() const;
+
 Q_SIGNALS:
     void displayNameChanged();
 
@@ -68,6 +75,7 @@ Q_SIGNALS:
     void customAccentLightnessChanged();
     void customAccentChromaChanged();
     void customAccentHueDegreesChanged();
+    void softwareRenderingEnabledChanged();
 
 public Q_SLOTS:
     void reload();
@@ -85,6 +93,7 @@ private:
     double m_customAccentLightness;
     double m_customAccentChroma;
     double m_customAccentHueDegrees;
+    bool m_softwareRenderingEnabled;
 };
 
 #endif

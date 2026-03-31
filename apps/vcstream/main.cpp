@@ -9,6 +9,8 @@
 #include <QUrl>
 #include <QWindow>
 
+#include <QSettings>
+
 #include <QtGlobal>
 
 #include "modules/app/defence/crashguard.h"
@@ -19,6 +21,7 @@
 #include "modules/ui/theme/accentimageprovider.h"
 #include "modules/ui/theme/themeiconimageprovider.h"
 #include "modules/ui/fonts/fontpreviewsafetycache.h"
+#include "modules/ui/video/vcvideopaintitem.h"
 
 int main( int argc, char **argv )
 {
@@ -39,6 +42,22 @@ int main( int argc, char **argv )
         QCoreApplication::setOrganizationName( QStringLiteral( "ElMagnificoGames" ) );
         QCoreApplication::setApplicationName( QStringLiteral( "vcstream" ) );
 
+#if defined( Q_OS_WIN )
+        {
+            // Compatibility: allow forcing Qt Quick to the software renderer.
+            // This must be applied before `QGuiApplication` is constructed.
+            QSettings settings;
+            const bool enabled = settings.value( QStringLiteral( "ui/compat/softwareRendering" ), false ).toBool();
+            if ( enabled ) {
+                // Note: software rendering is a scene graph adaptation, not an RHI backend.
+                // `QSG_RHI_BACKEND=software` is not a valid value and will be ignored by Qt.
+                if ( !qEnvironmentVariableIsSet( "QT_QUICK_BACKEND" ) ) {
+                    qputenv( "QT_QUICK_BACKEND", QByteArray( "software" ) );
+                }
+            }
+        }
+#endif
+
         QGuiApplication app( localArgc, localArgv );
         const QUrl mainUrl( QStringLiteral( "qrc:/qml/main.qml" ) );
         QWindow *mainWindow;
@@ -55,6 +74,8 @@ int main( int argc, char **argv )
 
         qmlRegisterUncreatableType<FontPreviewSafetyCache>( "VcStream", 1, 0, "FontPreviewSafety",
             QStringLiteral( "FontPreviewSafety is exposed via AppSupervisor.fontPreviewSafetyCache." ) );
+
+        qmlRegisterType<VcVideoPaintItem>( "VcStream", 1, 0, "VcVideoPaintItem" );
 
         QObject::connect( &app, &QCoreApplication::aboutToQuit, &appSupervisor, &AppSupervisor::shutdown );
 

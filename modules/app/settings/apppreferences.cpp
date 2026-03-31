@@ -2,6 +2,8 @@
 
 #include <QSettings>
 
+#include <QtGlobal>
+
 namespace {
 
 const QString kSettingsDisplayNameKey = QStringLiteral( "ui/profile/displayName" );
@@ -15,6 +17,7 @@ const QString kSettingsZoomPercentKey = QStringLiteral( "ui/appearance/zoomPerce
 const QString kSettingsCustomAccentLightnessKey = QStringLiteral( "ui/theme/customAccentLightness" );
 const QString kSettingsCustomAccentChromaKey = QStringLiteral( "ui/theme/customAccentChroma" );
 const QString kSettingsCustomAccentHueDegreesKey = QStringLiteral( "ui/theme/customAccentHueDegrees" );
+const QString kSettingsSoftwareRenderingEnabledKey = QStringLiteral( "ui/compat/softwareRendering" );
 
 }
 
@@ -32,8 +35,30 @@ AppPreferences::AppPreferences( QObject *parent )
     m_customAccentLightness = 0.75;
     m_customAccentChroma = 0.16;
     m_customAccentHueDegrees = 260.0;
+    m_softwareRenderingEnabled = false;
 
     reload();
+}
+
+bool AppPreferences::softwareRenderingEnabled() const
+{
+    return m_softwareRenderingEnabled;
+}
+
+void AppPreferences::setSoftwareRenderingEnabled( const bool enabled )
+{
+    if ( m_softwareRenderingEnabled != enabled ) {
+        m_softwareRenderingEnabled = enabled;
+        Q_EMIT softwareRenderingEnabledChanged();
+    }
+}
+
+bool AppPreferences::softwareRenderingActive() const
+{
+    // This reflects the current process state (not the persisted preference).
+    // The software renderer is enabled via the Qt Quick backend adaptation.
+    const QString v = qEnvironmentVariable( "QT_QUICK_BACKEND" );
+    return v.compare( QStringLiteral( "software" ), Qt::CaseInsensitive ) == 0;
 }
 
 QString AppPreferences::displayName() const
@@ -267,6 +292,8 @@ void AppPreferences::reload()
     setCustomAccentLightness( settings.value( kSettingsCustomAccentLightnessKey, m_customAccentLightness ).toDouble() );
     setCustomAccentChroma( settings.value( kSettingsCustomAccentChromaKey, m_customAccentChroma ).toDouble() );
     setCustomAccentHueDegrees( settings.value( kSettingsCustomAccentHueDegreesKey, m_customAccentHueDegrees ).toDouble() );
+
+    setSoftwareRenderingEnabled( settings.value( kSettingsSoftwareRenderingEnabledKey, m_softwareRenderingEnabled ).toBool() );
 }
 
 void AppPreferences::save()
@@ -284,5 +311,7 @@ void AppPreferences::save()
     settings.setValue( kSettingsCustomAccentLightnessKey, m_customAccentLightness );
     settings.setValue( kSettingsCustomAccentChromaKey, m_customAccentChroma );
     settings.setValue( kSettingsCustomAccentHueDegreesKey, m_customAccentHueDegrees );
+
+    settings.setValue( kSettingsSoftwareRenderingEnabledKey, m_softwareRenderingEnabled );
     settings.sync();
 }

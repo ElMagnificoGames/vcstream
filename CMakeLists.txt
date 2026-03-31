@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 3.24 )
 
-project( vcstream VERSION 0.9.1 LANGUAGES CXX )
+project( vcstream VERSION 0.9.2 LANGUAGES CXX )
 
 # Single-config generators (Ninja/Makefiles) default to an empty CMAKE_BUILD_TYPE.
 # For VCStream we want Debug by default so local builds include symbols, and so
@@ -37,7 +37,12 @@ if ( VCSTREAM_ENABLE_SANITIZERS )
         check_cxx_compiler_flag( "/fsanitize=address" VCSTREAM_HAS_MSVC_ASAN )
         if ( VCSTREAM_HAS_MSVC_ASAN )
             target_compile_options( vcstream_sanitizers INTERFACE "$<$<CONFIG:Debug>:/fsanitize=address>" )
-            target_link_options( vcstream_sanitizers INTERFACE "$<$<CONFIG:Debug>:/fsanitize=address>" )
+
+            # AddressSanitizer is enabled via the compiler flag. Do not pass
+            # `/fsanitize=address` to `link.exe` (it is not a linker option).
+            # Also disable incremental linking in ASAN builds to avoid
+            # linker warnings about incompatible metadata.
+            target_link_options( vcstream_sanitizers INTERFACE "$<$<CONFIG:Debug>:/INCREMENTAL:NO>" )
         endif()
     else()
         check_cxx_compiler_flag( "-fsanitize=address" VCSTREAM_HAS_ASAN )
@@ -86,6 +91,50 @@ find_package( Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Multimed
 enable_testing()
 
 function( vcstream_apply_default_test_environment testName )
+    # Ensure tests can run from a plain shell environment on Windows.
+    # In particular, Debug builds may depend on Qt debug DLLs, the MSVC debug CRT,
+    # and (when sanitisers are enabled) the ASAN runtime DLL.
+    if ( WIN32 )
+        # Add the Qt bin directory (Qt6Cored.dll, etc.) to PATH.
+        if ( DEFINED Qt6_DIR )
+            cmake_path( GET Qt6_DIR PARENT_PATH _vcstream_qt6_cmake_dir )
+            cmake_path( GET _vcstream_qt6_cmake_dir PARENT_PATH _vcstream_qt6_lib_dir )
+            cmake_path( GET _vcstream_qt6_lib_dir PARENT_PATH _vcstream_qt6_prefix_dir )
+            set( _vcstream_qt6_bin_dir "${_vcstream_qt6_prefix_dir}/bin" )
+            if ( EXISTS "${_vcstream_qt6_bin_dir}" )
+                set_property( TEST ${testName} APPEND PROPERTY
+                    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_vcstream_qt6_bin_dir}" )
+            endif()
+        endif()
+
+        if ( MSVC )
+            # Add the compiler bin directory; this is where MSVC places
+            # clang_rt.asan_dynamic-x86_64.dll for /fsanitize=address.
+            get_filename_component( _vcstream_msvc_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY )
+            if ( EXISTS "${_vcstream_msvc_bin_dir}/clang_rt.asan_dynamic-x86_64.dll" )
+                set_property( TEST ${testName} APPEND PROPERTY
+                    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_vcstream_msvc_bin_dir}" )
+            endif()
+
+            # Add the MSVC debug CRT directory (MSVCP140D.dll, etc.) if present.
+            cmake_path( GET _vcstream_msvc_bin_dir PARENT_PATH _vcstream_msvc_arch_dir )
+            cmake_path( GET _vcstream_msvc_arch_dir PARENT_PATH _vcstream_msvc_host_dir )
+            cmake_path( GET _vcstream_msvc_host_dir PARENT_PATH _vcstream_msvc_bin_root_dir )
+            cmake_path( GET _vcstream_msvc_bin_root_dir PARENT_PATH _vcstream_msvc_version_dir )
+            cmake_path( GET _vcstream_msvc_version_dir PARENT_PATH _vcstream_msvc_root_dir )
+            cmake_path( GET _vcstream_msvc_root_dir PARENT_PATH _vcstream_vc_tools_dir )
+            cmake_path( GET _vcstream_vc_tools_dir PARENT_PATH _vcstream_vc_dir )
+
+            get_filename_component( _vcstream_msvc_version "${_vcstream_msvc_version_dir}" NAME )
+            set( _vcstream_debug_crt_dir
+                "${_vcstream_vc_dir}/Redist/MSVC/${_vcstream_msvc_version}/debug_nonredist/x64/Microsoft.VC143.DebugCRT" )
+            if ( EXISTS "${_vcstream_debug_crt_dir}/MSVCP140D.dll" )
+                set_property( TEST ${testName} APPEND PROPERTY
+                    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_vcstream_debug_crt_dir}" )
+            endif()
+        endif()
+    endif()
+
     if ( VCSTREAM_ENABLE_SANITIZERS )
         # Keep the options cross-platform and low-assumption.
         set_property( TEST ${testName} APPEND PROPERTY ENVIRONMENT "ASAN_OPTIONS=abort_on_error=1:detect_leaks=0" )
@@ -101,4 +150,5 @@ option( VCSTREAM_BUILD_INTERNAL_TOOLS "Build internal developer tools" OFF )
 
 if ( VCSTREAM_BUILD_INTERNAL_TOOLS )
     add_subdirectory( apps/fontprobe )
+    add_subdirectory( apps/cameraprobe )
 endif()

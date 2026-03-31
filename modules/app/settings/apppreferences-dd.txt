@@ -90,6 +90,16 @@ Properties:
   - Units: degrees.
   - The value is wrapped to [0,360).
 
+- `bool softwareRenderingEnabled` enables a Windows compatibility mode that forces Qt Quick to use the software renderer.
+  - Default: false.
+  - Notes:
+    - Requires restart (it is applied before `QGuiApplication` starts).
+    - Does not override user-provided environment variables like `QT_QUICK_BACKEND`.
+
+- `bool softwareRenderingActive` reflects whether the current process is running with the Qt Quick software scene graph adaptation.
+  - Notes:
+    - This is derived from the runtime environment (for example `QT_QUICK_BACKEND=software`), not from the persisted preference.
+
   Defaults:
   - `customAccentLightness`: 0.75
   - `customAccentChroma`: 0.16
@@ -118,6 +128,9 @@ Settings keys:
 - `ui/theme/customAccentLightness`
 - `ui/theme/customAccentChroma`
 - `ui/theme/customAccentHueDegrees`
+- `ui/compat/softwareRendering`
+
+When `ui/compat/softwareRendering` is enabled on Windows, VCStream sets `QT_QUICK_BACKEND=software` at process startup (unless already provided by the user). In that mode Qt Multimedia's `VideoOutput` may not render frames; camera previews use the `VcVideoPaintItem` software fallback instead.
 
 Thread safety:
 - Thread-safe: No.

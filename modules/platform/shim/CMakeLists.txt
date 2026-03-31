@@ -57,3 +57,33 @@ target_link_libraries( vcstream_platform_shim_qtmultimediarescan PRIVATE
 target_include_directories( vcstream_platform_shim_qtmultimediarescan PUBLIC
     ${PROJECT_SOURCE_DIR}
 )
+
+
+add_library( vcstream_platform_shim_dshowcameraenum
+    dshowcameraenum.h
+)
+
+if ( WIN32 )
+    target_sources( vcstream_platform_shim_dshowcameraenum PRIVATE
+        dshowcameraenum-win32.cpp
+    )
+
+    target_link_libraries( vcstream_platform_shim_dshowcameraenum PRIVATE
+        ole32
+        oleaut32
+        strmiids
+    )
+else()
+    target_sources( vcstream_platform_shim_dshowcameraenum PRIVATE
+        dshowcameraenum-other.cpp
+    )
+endif()
+
+target_link_libraries( vcstream_platform_shim_dshowcameraenum PRIVATE
+    Qt6::Core
+    vcstream_warnings
+)
+
+target_include_directories( vcstream_platform_shim_dshowcameraenum PUBLIC
+    ${PROJECT_SOURCE_DIR}
+)

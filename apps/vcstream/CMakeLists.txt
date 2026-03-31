@@ -15,6 +15,7 @@ target_link_libraries( vcstream PRIVATE
     vcstream_ui_placement
     vcstream_ui_colour
     vcstream_ui_theme
+    vcstream_ui_video
 )
 
 target_compile_definitions( vcstream PRIVATE

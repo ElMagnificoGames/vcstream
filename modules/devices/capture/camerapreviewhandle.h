@@ -14,15 +14,19 @@ class CameraPreviewHandle final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY( QString deviceId READ deviceId CONSTANT )
+    Q_PROPERTY( QString backendName READ backendName CONSTANT )
     Q_PROPERTY( QString description READ description NOTIFY descriptionChanged )
     Q_PROPERTY( bool running READ running WRITE setRunning NOTIFY runningChanged )
     Q_PROPERTY( QString errorText READ errorText NOTIFY errorTextChanged )
+    Q_PROPERTY( bool hasFrame READ hasFrame NOTIFY hasFrameChanged )
+    Q_PROPERTY( int framesReceived READ framesReceived NOTIFY framesReceivedChanged )
 
 public:
     explicit CameraPreviewHandle( MediaCapture &owner, const QString &deviceId, QObject *parent = nullptr );
     ~CameraPreviewHandle() override;
 
     QString deviceId() const;
+    QString backendName() const;
     QString description() const;
     QVideoSink *viewSink() const;
 
@@ -32,6 +36,9 @@ public:
     QString errorText() const;
     void setErrorText( const QString &text );
 
+    bool hasFrame() const;
+    int framesReceived() const;
+
     Q_INVOKABLE void setViewSink( QVideoSink *sink );
     Q_INVOKABLE void close();
 
@@ -39,20 +46,27 @@ Q_SIGNALS:
     void descriptionChanged();
     void runningChanged();
     void errorTextChanged();
+    void hasFrameChanged();
+    void framesReceivedChanged();
 
 private:
     friend class MediaCapture;
 
     void setDescription( const QString &description );
+    void setHasFrame( bool hasFrame );
+    void setFramesReceived( int frames );
 
 private:
     MediaCapture &m_owner;
     const QString m_deviceId;
+    const QString m_backendName;
     QString m_description;
     QString m_errorText;
     QPointer<QVideoSink> m_viewSink;
     bool m_running;
     bool m_registered;
+    bool m_hasFrame;
+    int m_framesReceived;
 };
 
 #endif

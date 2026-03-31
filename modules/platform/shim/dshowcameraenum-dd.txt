@@ -1,0 +1,36 @@
+= DShowCameraEnum
+
+== Description
+
+I am a Windows-specific DirectShow camera enumeration shim.
+I enumerate DirectShow video capture devices that may not be visible to Qt Multimedia's `QMediaDevices::videoInputs()` on Windows.
+
+I collaborate with `LocalDeviceCatalogue`, which may merge my results with Qt's device list to present a more complete camera list to the user.
+I do not capture video frames, I do not implement a device refresh UI, and I do not become a general-purpose DirectShow wrapper.
+
+State model:
+- Thread affinity: caller thread.
+- Lifetime/ownership: stateless.
+- Re-entrancy: re-entrant.
+
+== Public interface
+
+- `QVector<VideoInput> dshowcameraenum::enumerateVideoInputs( QString *outDebugText )` returns the current DirectShow video input snapshot.
+  - Behaviour:
+    - Windows: best-effort enumeration via `CLSID_VideoInputDeviceCategory`.
+    - Non-Windows: returns an empty list.
+  - Errors:
+    - No explicit failure reporting; may return an empty list.
+    - When provided, `outDebugText` contains a short diagnostic message.
+
+- `QString dshowcameraenum::stableIdFromMonikerDisplayName( const QString &monikerDisplayName )` produces a stable vcstream device id.
+- `bool dshowcameraenum::stableIdToMonikerDisplayName( const QString &stableId, QString *outMonikerDisplayName )` decodes the stable id.
+
+Implementation note:
+- Stable ids are encoded as `dshow:<hex>` where `<hex>` is the UTF-8 hex encoding of the moniker display name.
+
+== Non-goals
+
+- I do not provide DirectShow capture support.
+- I do not attempt to determine a default camera.
+- I do not deduplicate devices across different backends; callers decide merge policy.

@@ -13,9 +13,11 @@ CheckBox {
     indicator: Rectangle {
         implicitWidth: 22
         implicitHeight: 22
+        width: Math.min( implicitWidth, control.height )
+        height: Math.min( implicitHeight, control.height )
         x: control.leftPadding
-        y: Math.round( ( control.height - height ) / 2 )
-        radius: 5
+        y: Math.max( 0, Math.round( ( control.height - height ) / 2 ) )
+        radius: Math.min( 5, Math.round( height / 2 ) )
         color: control.checked
             ? ( theme ? theme.primaryAccentColour : palette.highlight )
             : ( theme ? theme.panelInsetColour : palette.base )

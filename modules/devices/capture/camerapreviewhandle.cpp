@@ -6,11 +6,14 @@ CameraPreviewHandle::CameraPreviewHandle( MediaCapture &owner, const QString &de
     : QObject( parent )
     , m_owner( owner )
     , m_deviceId( deviceId )
+    , m_backendName( deviceId.startsWith( QStringLiteral( "dshow:" ) ) ? QStringLiteral( "DirectShow" ) : QStringLiteral( "Qt Multimedia" ) )
     , m_description()
     , m_errorText()
     , m_viewSink( nullptr )
     , m_running( false )
     , m_registered( false )
+    , m_hasFrame( false )
+    , m_framesReceived( 0 )
 {
     m_description = QString();
     m_errorText = QString();
@@ -28,6 +31,11 @@ CameraPreviewHandle::~CameraPreviewHandle()
 QString CameraPreviewHandle::deviceId() const
 {
     return m_deviceId;
+}
+
+QString CameraPreviewHandle::backendName() const
+{
+    return m_backendName;
 }
 
 QString CameraPreviewHandle::description() const
@@ -67,6 +75,16 @@ void CameraPreviewHandle::setErrorText( const QString &text )
     }
 }
 
+bool CameraPreviewHandle::hasFrame() const
+{
+    return m_hasFrame;
+}
+
+int CameraPreviewHandle::framesReceived() const
+{
+    return m_framesReceived;
+}
+
 void CameraPreviewHandle::setViewSink( QVideoSink *sink )
 {
     if ( m_viewSink != sink ) {
@@ -94,5 +112,21 @@ void CameraPreviewHandle::setDescription( const QString &description )
     if ( m_description != description ) {
         m_description = description;
         Q_EMIT descriptionChanged();
+    }
+}
+
+void CameraPreviewHandle::setHasFrame( const bool hasFrame )
+{
+    if ( m_hasFrame != hasFrame ) {
+        m_hasFrame = hasFrame;
+        Q_EMIT hasFrameChanged();
+    }
+}
+
+void CameraPreviewHandle::setFramesReceived( const int frames )
+{
+    if ( m_framesReceived != frames ) {
+        m_framesReceived = frames;
+        Q_EMIT framesReceivedChanged();
     }
 }

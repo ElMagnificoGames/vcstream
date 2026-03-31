@@ -19,10 +19,12 @@ State model:
 - `void start()` begins producing frames.
 - `void stop()` stops producing frames.
 - `videoFrameChanged( const QVideoFrame &frame )` is emitted when a new frame is available.
+- `QString errorText` is a user-facing message for capture liveness or format failures.
+- `errorTextChanged()` is emitted when `errorText` changes.
 
 Thread safety:
 - Thread-safe: No.
-- Notes: Intended for UI-thread use; frame emission and fan-out occur on the same thread.
+- Notes: Intended for UI-thread use. Implementations may receive frames on backend threads but should forward signals to the owning thread.
 
 == Implementation details
 

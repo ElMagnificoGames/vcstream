@@ -1,0 +1,40 @@
+ = VcVideoPaintItem
+
+== Description
+
+I am VcVideoPaintItem.
+
+I provide a software-renderer-friendly camera/video preview item for the Qt Quick UI.
+I collaborate with Qt Multimedia's QVideoSink to receive frames, and with authored QML pages (for example the camera preview panels) to present a reliable preview when the Qt Quick software scene graph adaptation is active.
+
+I do not attempt to replace Qt Multimedia's VideoOutput in the normal hardware-accelerated renderer path.
+I do not provide high-performance video playback; I prioritise predictable behaviour and basic frame visibility.
+
+== Motivation
+
+- When `QT_QUICK_BACKEND=software` is active, Qt Quick uses the software scene graph adaptation.
+- On Windows with Qt 6.11, Qt Multimedia's `VideoOutput` may accept frames on its `videoSink` but fail to render them, producing a blank preview.
+- VCStream uses this item as a fallback preview renderer in that mode to avoid a silent blank panel.
+
+== State model
+
+- Thread affinity: GUI thread only (Qt Quick item).
+- Lifetime: owned by the QML object tree; `videoSink` is owned by the item.
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `QVideoSink *videoSink` (constant)
+  - The sink that receives frames.
+  - Frames are throttled for repaint to avoid repainting at unbounded cadence.
+- `bool hasFrame` (read-only)
+  - True once at least one frame has been successfully converted for drawing.
+- `int framesReceived` (read-only)
+  - Counts frames observed by the sink.
+- `QString errorText` (read-only)
+  - Set when frames cannot be converted to an image for drawing.
+
+== Requirements
+
+- Language: C++17.
+- Qt: 6.x (QtQuick, QtMultimedia).

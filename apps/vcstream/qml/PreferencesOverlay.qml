@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtMultimedia 6.0
+import VcStream 1.0
 
 Control {
     id: root
@@ -12,6 +13,16 @@ Control {
     property var appPalette
     property var theme
     property var fontFamiliesCache: []
+
+    readonly property bool softwareRenderingActiveNow: ( appSupervisor
+        && appSupervisor.preferences
+        ? appSupervisor.preferences.softwareRenderingActive
+        : false )
+
+    readonly property bool hasCompatibilityOptions: ( Qt.platform.os === "windows" )
+    readonly property int appearanceCategoryIndex: 0
+    readonly property int devicesCategoryIndex: 1
+    readonly property int compatibilityCategoryIndex: ( root.hasCompatibilityOptions ? 2 : -1 )
 
     // Camera preview (device registry is owned by AppSupervisor).
     property bool cameraPreviewOpen: false
@@ -165,7 +176,9 @@ Control {
 
         cameraPreviewHandle = appSupervisor.mediaCapture.acquireCameraPreviewHandle( cameraPreviewDeviceId, panel )
         if ( cameraPreviewHandle ) {
-            cameraPreviewHandle.setViewSink( preferencesCameraPreviewVideo.videoSink )
+            cameraPreviewHandle.setViewSink( root.softwareRenderingActiveNow
+                ? preferencesCameraPreviewSoftwareVideo.videoSink
+                : preferencesCameraPreviewVideo.videoSink )
             cameraPreviewHandle.running = true
             cameraPreviewActive = true
         }
@@ -194,6 +207,16 @@ Control {
 
         if ( open && appSupervisor && appSupervisor.fontFamilies ) {
             fontFamiliesCache = appSupervisor.fontFamilies()
+        }
+
+        if ( open ) {
+            if ( categoryModel && categoryModel.count > 0 ) {
+                if ( root.currentCategoryIndex < 0 || root.currentCategoryIndex >= categoryModel.count ) {
+                    root.currentCategoryIndex = 0
+                }
+            } else {
+                root.currentCategoryIndex = 0
+            }
         }
     }
 
@@ -266,6 +289,7 @@ Control {
 
                         ColumnLayout {
                             width: parent.width
+                            height: implicitHeight
                             spacing: ( root.theme ? root.theme.spaceCompact : 8 )
 
                             Label {
@@ -824,6 +848,127 @@ Control {
     }
 
     Component {
+        id: compatibilityPaneComponent
+
+        Item {
+            objectName: "preferencesCompatibilityPane"
+
+            ScrollView {
+                id: compatibilityScrollView
+                objectName: "preferencesCompatibilityScrollView"
+                anchors.fill: parent
+                clip: true
+
+                // Always reserve space so the scroll bar cannot cover content.
+                rightPadding: ( compatibilityScrollBar.width + 12 )
+                bottomPadding: ( compatibilityHScrollBar.visible ? ( compatibilityHScrollBar.height + 12 ) : 0 )
+
+                ScrollBar.horizontal: VcScrollBar {
+                    id: compatibilityHScrollBar
+                    objectName: "preferencesCompatibilityScrollBarH"
+                    theme: root.theme
+                    policy: ScrollBar.AsNeeded
+                    orientation: Qt.Horizontal
+                    width: compatibilityScrollView.width
+                    x: 0
+                    y: compatibilityScrollView.height - height
+                }
+
+                ScrollBar.vertical: VcScrollBar {
+                    id: compatibilityScrollBar
+                    objectName: "preferencesCompatibilityScrollBar"
+                    theme: root.theme
+                    policy: ScrollBar.AsNeeded
+                    height: compatibilityScrollView.height
+                    x: compatibilityScrollView.width - width
+                    y: 0
+                }
+
+                contentItem: Flickable {
+                    id: compatibilityFlickable
+                    width: compatibilityScrollView.availableWidth
+                    height: compatibilityScrollView.availableHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    flickableDirection: Flickable.VerticalFlick
+
+                    ScrollIndicator.horizontal: ScrollIndicator { visible: false }
+                    ScrollIndicator.vertical: ScrollIndicator { visible: false }
+
+                    contentWidth: width
+                    contentHeight: compatibilityColumn.implicitHeight
+
+                    Column {
+                        id: compatibilityColumn
+                        width: compatibilityFlickable.width
+                        spacing: ( root.theme ? root.theme.spaceTight : 12 )
+
+                        VcPanel {
+                            width: parent.width
+                            theme: root.theme
+                            accentRole: "tertiary"
+                            visible: root.hasCompatibilityOptions
+
+                            Item {
+                                id: softwareRenderingBox
+                                width: parent.width
+                                height: implicitHeight
+
+                                readonly property int gap: ( root.theme ? root.theme.spaceCompact : 8 )
+
+                                // Bind to actual child geometry so containment tests remain
+                                // stable under extreme zoom/font scaling.
+                                implicitHeight: childrenRect.height
+
+                                Label {
+                                    id: softwareRenderingTitle
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    y: 0
+                                    text: "Software rendering"
+                                    font.pixelSize: ( root.theme ? root.theme.fontBasePx : 14 )
+                                    color: ( root.theme ? root.theme.textColour : root.pal.text )
+                                }
+
+                                VcCheckBox {
+                                    id: softwareRenderingCheck
+                                    objectName: "preferencesSoftwareRenderingCheck"
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    y: softwareRenderingTitle.y + softwareRenderingTitle.height + softwareRenderingBox.gap
+                                    theme: root.theme
+                                    text: "Use software rendering (restart required)"
+                                    property bool testSkipActivate: true
+                                    checked: ( appSupervisor && appSupervisor.preferences
+                                        ? appSupervisor.preferences.softwareRenderingEnabled
+                                        : false )
+
+                                    onClicked: {
+                                        if ( appSupervisor && appSupervisor.preferences ) {
+                                            appSupervisor.preferences.softwareRenderingEnabled = checked
+                                        }
+                                    }
+                                }
+
+                                Label {
+                                    id: softwareRenderingHelp
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    y: softwareRenderingCheck.y + softwareRenderingCheck.height + softwareRenderingBox.gap
+                                    text: "Slower and uses more CPU, but can fix blank, frozen, or glitchy video output. Before turning this on, look in your recording/streaming app for a newer Windows capture option (often called 'Windows Graphics Capture' or 'Windows 10/11 capture') - it's usually faster and more reliable than older options, but may be off by default. Only use this setting as a fallback if the newer capture option doesn't work for you."
+                                    wrapMode: Text.Wrap
+                                    color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
+                                }
+                            }
+                        }
+
+                        Item { width: parent.width; height: 6 }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
         id: devicesPaneComponent
 
         Item {
@@ -1172,6 +1317,21 @@ Control {
                         id: categoryModel
                         ListElement { title: "Appearance"; objectName: "preferencesCategoryGeneral" }
                         ListElement { title: "Devices"; objectName: "preferencesCategoryDevices" }
+
+                        Component.onCompleted: {
+                            if ( root.hasCompatibilityOptions ) {
+                                var already = false
+                                for ( var i = 0; i < categoryModel.count; ++i ) {
+                                    if ( categoryModel.get( i ).objectName === "preferencesCategoryCompatibility" ) {
+                                        already = true
+                                    }
+                                }
+
+                                if ( !already ) {
+                                    categoryModel.append( { "title": "Compatibility", "objectName": "preferencesCategoryCompatibility" } )
+                                }
+                            }
+                        }
                     }
 
                     ListView {
@@ -1227,7 +1387,15 @@ Control {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    sourceComponent: ( root.currentCategoryIndex === 1 ? devicesPaneComponent : generalPaneComponent )
+                    sourceComponent: {
+                        if ( root.currentCategoryIndex === root.devicesCategoryIndex ) {
+                            return devicesPaneComponent
+                        }
+                        if ( root.currentCategoryIndex === root.compatibilityCategoryIndex ) {
+                            return compatibilityPaneComponent
+                        }
+                        return generalPaneComponent
+                    }
                 }
             }
 
@@ -1330,8 +1498,23 @@ Control {
                                 objectName: "preferencesCameraPreviewVideo"
                                 anchors.fill: parent
                                 fillMode: VideoOutput.PreserveAspectFit
-                                visible: ( root.cameraPreviewHandle !== null
+                                visible: ( !root.softwareRenderingActiveNow
+                                    && root.cameraPreviewHandle !== null
+                                    && root.cameraPreviewHandle.hasFrame === true
                                     && !( root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) )
+                                opacity: ( root.cameraPreviewDisconnected ? 0.35 : 1.0 )
+                            }
+
+                            VcVideoPaintItem {
+                                id: preferencesCameraPreviewSoftwareVideo
+                                objectName: "preferencesCameraPreviewSoftwareVideo"
+                                anchors.fill: parent
+                                visible: ( root.softwareRenderingActiveNow
+                                    && root.cameraPreviewHandle !== null
+                                    && root.cameraPreviewHandle.hasFrame === true
+                                    && !( root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 )
+                                    && !( preferencesCameraPreviewSoftwareVideo.errorText && preferencesCameraPreviewSoftwareVideo.errorText.length > 0 )
+                                    && preferencesCameraPreviewSoftwareVideo.hasFrame === true )
                                 opacity: ( root.cameraPreviewDisconnected ? 0.35 : 1.0 )
                             }
 
@@ -1375,6 +1558,18 @@ Control {
                                     if ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) {
                                         return root.cameraPreviewHandle.errorText
                                     }
+                                    if ( root.softwareRenderingActiveNow
+                                        && preferencesCameraPreviewSoftwareVideo.errorText
+                                        && preferencesCameraPreviewSoftwareVideo.errorText.length > 0 ) {
+                                        return preferencesCameraPreviewSoftwareVideo.errorText
+                                    }
+                                    if ( root.cameraPreviewHandle && root.cameraPreviewHandle.hasFrame === false ) {
+                                        return "Starting camera..."
+                                    }
+                                    if ( root.softwareRenderingActiveNow
+                                        && preferencesCameraPreviewSoftwareVideo.hasFrame === false ) {
+                                        return "Starting camera..."
+                                    }
                                     if ( !appSupervisor || !appSupervisor.deviceCatalogue || !appSupervisor.deviceCatalogue.cameras ) {
                                         return "No camera devices detected."
                                     }
@@ -1391,7 +1586,12 @@ Control {
                                     return "Starting camera..."
                                 }
                                 visible: ( root.cameraPreviewHandle === null
-                                    || ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) )
+                                    || ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 )
+                                    || ( root.cameraPreviewHandle && root.cameraPreviewHandle.hasFrame === false )
+                                    || ( root.softwareRenderingActiveNow
+                                        && ( preferencesCameraPreviewSoftwareVideo.hasFrame === false
+                                            || ( preferencesCameraPreviewSoftwareVideo.errorText
+                                                && preferencesCameraPreviewSoftwareVideo.errorText.length > 0 ) ) ) )
                                 color: ( root.theme ? root.theme.metaTextColour : root.pal.mid )
                             }
                         }

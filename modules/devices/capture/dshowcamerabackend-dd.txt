@@ -1,0 +1,39 @@
+= DShowCameraBackend
+
+== Description
+
+I am the Windows DirectShow camera backend.
+I provide a `CameraStreamBackend` implementation that can open DirectShow-only cameras (including some virtual cameras) that Qt Multimedia does not enumerate on Windows.
+
+I collaborate with `MediaCapture`, which may route `dshow:` device ids to me.
+I collaborate with `DShowCameraEnum` for stable ids.
+I do not provide device enumeration directly (that is `DShowCameraEnum`), and I do not depend on Qt Multimedia camera capture.
+
+State model:
+- Thread affinity: UI thread for control; DirectShow invokes frame callbacks on its own threads.
+- Lifetime/ownership: owned by `MediaCapture` (via a routing backend).
+- Re-entrancy: not re-entrant.
+
+== Public interface
+
+- `QString descriptionForId( const QString &deviceId ) const` resolves a `dshow:` id to a friendly name.
+- `std::unique_ptr<CameraStreamBackend> createStream( const QString &deviceId, QObject *parent ) const` opens a DirectShow graph and returns a stream.
+
+Errors:
+- If the id cannot be resolved or the DirectShow graph cannot be constructed, stream creation returns null.
+
+== Implementation details
+
+- Device ids:
+  - `dshow:<hex>` where `<hex>` is the UTF-8 hex encoding of a DirectShow moniker display name.
+- Capture:
+  - Uses a DirectShow filter graph with the legacy Sample Grabber to receive frames.
+  - Selects an output format via `IAMStreamConfig` (preferring YUY2/UYVY when available).
+  - Receives frames via `ISampleGrabberCB::SampleCB` (`IMediaSample`) and converts to `QVideoFrame( QImage )`.
+  - Treats packed YUV sample buffers as top-down even when `biHeight` is positive (some drivers report RGB-style bottom-up metadata for YUV formats).
+  - Emits simple user-facing `errorText` for "no frames" and unsupported formats; VCStream must not silently drop frames.
+
+== Requirements
+
+- Language: C++17.
+- Platform: Windows.

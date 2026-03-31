@@ -24,7 +24,7 @@ Arguments:
 
 Ownership:
 - The returned handle is a QObject child of `owner`.
-- The handle does not own the view sink; callers attach a `VideoOutput.videoSink`.
+- The handle does not own the view sink; callers attach a `QVideoSink` exposed by QML (for example `VideoOutput.videoSink`).
 
 Lifetime:
 - When the handle is destroyed (or `close()` is called), it releases its view sink.
@@ -43,7 +43,8 @@ Errors:
 
 - One capture pipeline exists per camera device id.
 - Each pipeline is implemented by a backend stream (`CameraStreamBackend`).
-- The default backend uses Qt Multimedia (`QCamera` + `QMediaCaptureSession` + `QVideoSink`).
+- Most platforms use Qt Multimedia (`QCamera` + `QMediaCaptureSession` + `QVideoSink`).
+- On Windows, `MediaCapture` may route `dshow:` device ids to a DirectShow backend so DirectShow-only virtual cameras can be previewed.
 - Alternative backends (for example `NullCameraBackend`) can provide deterministic synthetic frames.
 
 == Requirements

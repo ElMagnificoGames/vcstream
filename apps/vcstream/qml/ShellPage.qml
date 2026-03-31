@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtMultimedia 6.0
+import VcStream 1.0
 
 Page {
     id: root
@@ -11,6 +12,11 @@ Page {
     property var uiMetrics
     property var appPalette
     property var theme
+
+    readonly property bool softwareRenderingActiveNow: ( appSupervisor
+        && appSupervisor.preferences
+        ? appSupervisor.preferences.softwareRenderingActive
+        : false )
 
     SystemPalette {
         id: sysPal
@@ -65,11 +71,6 @@ Page {
     property bool selectedSourceExportEnabled: false
     property bool selectedSourceIsAvailable: true
     property bool sourceInspectorOpen: false
-
-    // Sources list scrollbars:
-    // computed to avoid binding loops between ScrollBar visibility and ListView geometry.
-    property bool sourcesNeedsHScroll: false
-    property bool sourcesNeedsVScroll: false
 
     // Horizontal scroll support for long source labels.
     // This is a best-effort hint used to drive the ListView contentWidth.
@@ -315,36 +316,6 @@ Page {
         root.sourcesContentWidthHint = Math.ceil( maxW + pad )
     }
 
-    function recomputeSourcesScrollNeeds() {
-        if ( !sourcesFrame || !sourcesList || !sourcesScrollBar || !sourcesHScrollBar ) {
-            return
-        }
-
-        const leftPad = ( theme ? theme.spaceCompact : 8 )
-        const rightPad = ( theme ? theme.spaceCompact : 8 )
-        const topPad = ( theme ? theme.spaceNudge : 4 )
-        const bottomPad = ( theme ? theme.spaceCompact : 8 )
-        const gap = ( theme ? theme.spaceNudge : 4 )
-
-        const vBarW = sourcesScrollBar.implicitWidth
-        const hBarH = sourcesHScrollBar.implicitHeight
-
-        const viewW0 = Math.max( 0, sourcesFrame.width - leftPad - rightPad )
-        const viewH0 = Math.max( 0, sourcesFrame.height - topPad - bottomPad )
-
-        var needH = ( root.sourcesContentWidthHint > viewW0 + 1 )
-        var viewH1 = viewH0 - ( needH ? ( hBarH + gap ) : 0 )
-        var needV = ( sourcesList.contentHeight > viewH1 + 1 )
-
-        var viewW1 = viewW0 - ( needV ? ( vBarW + gap ) : 0 )
-        needH = ( root.sourcesContentWidthHint > viewW1 + 1 )
-        viewH1 = viewH0 - ( needH ? ( hBarH + gap ) : 0 )
-        needV = ( sourcesList.contentHeight > viewH1 + 1 )
-
-        root.sourcesNeedsHScroll = needH
-        root.sourcesNeedsVScroll = needV
-    }
-
     function resyncSelectedSourceIndexFromIdentity() {
         if ( !root.selectedSourceKind || root.selectedSourceKind.length <= 0 ) {
             root.selectedSourceIndex = -1
@@ -547,7 +518,6 @@ Page {
         resyncSelectedSourceIndexFromIdentity()
 
         recomputeSourcesContentWidthHint()
-        recomputeSourcesScrollNeeds()
     }
 
     function updateWindowsSection() {
@@ -616,7 +586,6 @@ Page {
         }
 
         recomputeSourcesContentWidthHint()
-        recomputeSourcesScrollNeeds()
     }
 
     function isDeviceAvailable( list, id ) {
@@ -725,7 +694,9 @@ Page {
 
         cameraPreviewHandle = appSupervisor.mediaCapture.acquireCameraPreviewHandle( cameraPreviewDeviceId, sourceInspectorPanel )
         if ( cameraPreviewHandle ) {
-            cameraPreviewHandle.setViewSink( previewVideo.videoSink )
+            cameraPreviewHandle.setViewSink( root.softwareRenderingActiveNow
+                ? previewSoftwareVideo.videoSink
+                : previewVideo.videoSink )
             cameraPreviewHandle.running = true
             cameraPreviewActive = true
         }
@@ -956,8 +927,23 @@ Page {
                                     objectName: "cameraPreviewVideoOutput"
                                     anchors.fill: parent
                                     fillMode: VideoOutput.PreserveAspectFit
-                                    visible: ( root.cameraPreviewHandle !== null
+                                    visible: ( !root.softwareRenderingActiveNow
+                                        && root.cameraPreviewHandle !== null
+                                        && root.cameraPreviewHandle.hasFrame === true
                                         && !( root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) )
+                                    opacity: ( root.cameraPreviewDisconnected ? 0.35 : 1.0 )
+                                }
+
+                                VcVideoPaintItem {
+                                    id: previewSoftwareVideo
+                                    objectName: "cameraPreviewSoftwareVideo"
+                                    anchors.fill: parent
+                                    visible: ( root.softwareRenderingActiveNow
+                                        && root.cameraPreviewHandle !== null
+                                        && root.cameraPreviewHandle.hasFrame === true
+                                        && !( root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 )
+                                        && !( previewSoftwareVideo.errorText && previewSoftwareVideo.errorText.length > 0 )
+                                        && previewSoftwareVideo.hasFrame === true )
                                     opacity: ( root.cameraPreviewDisconnected ? 0.35 : 1.0 )
                                 }
 
@@ -1001,6 +987,18 @@ Page {
                                         if ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) {
                                             return root.cameraPreviewHandle.errorText
                                         }
+                                        if ( root.softwareRenderingActiveNow
+                                            && previewSoftwareVideo.errorText
+                                            && previewSoftwareVideo.errorText.length > 0 ) {
+                                            return previewSoftwareVideo.errorText
+                                        }
+                                        if ( root.cameraPreviewHandle && root.cameraPreviewHandle.hasFrame === false ) {
+                                            return "Starting camera..."
+                                        }
+                                        if ( root.softwareRenderingActiveNow
+                                            && previewSoftwareVideo.hasFrame === false ) {
+                                            return "Starting camera..."
+                                        }
                                         if ( !appSupervisor || !appSupervisor.deviceCatalogue || !appSupervisor.deviceCatalogue.cameras ) {
                                             return "No camera devices detected."
                                         }
@@ -1020,7 +1018,12 @@ Page {
                                         return "Starting camera..."
                                     }
                                     visible: ( root.cameraPreviewHandle === null
-                                        || ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 ) )
+                                        || ( root.cameraPreviewHandle && root.cameraPreviewHandle.errorText && root.cameraPreviewHandle.errorText.length > 0 )
+                                        || ( root.cameraPreviewHandle && root.cameraPreviewHandle.hasFrame === false )
+                                        || ( root.softwareRenderingActiveNow
+                                            && ( previewSoftwareVideo.hasFrame === false
+                                                || ( previewSoftwareVideo.errorText
+                                                    && previewSoftwareVideo.errorText.length > 0 ) ) ) )
                                     color: ( theme ? theme.metaTextColour : pal.mid )
                                 }
                             }
@@ -1342,30 +1345,23 @@ Page {
                                         radius: 6
                                         color: ( theme ? theme.panelInsetColour : tintSoft )
 
-                                        onWidthChanged: sourcesScrollNeedsTimer.restart()
-                                        onHeightChanged: sourcesScrollNeedsTimer.restart()
-
-                                        Timer {
-                                            id: sourcesScrollNeedsTimer
-                                            interval: 0
-                                            repeat: false
-                                            onTriggered: root.recomputeSourcesScrollNeeds()
-                                        }
-
                                         ListView {
                                             id: sourcesList
                                             objectName: "sourcesList"
                                             anchors.fill: parent
-                                            anchors.leftMargin: ( theme ? theme.spaceCompact : 8 )
-                                            anchors.rightMargin: ( theme ? theme.spaceCompact : 8 )
-                                                + ( root.sourcesNeedsVScroll
-                                                    ? ( sourcesScrollBar.implicitWidth + ( theme ? theme.spaceNudge : 4 ) )
-                                                    : 0 )
-                                            anchors.bottomMargin: ( theme ? theme.spaceCompact : 8 )
-                                                + ( root.sourcesNeedsHScroll
-                                                    ? ( sourcesHScrollBar.implicitHeight + ( theme ? theme.spaceNudge : 4 ) )
-                                                    : 0 )
-                                            anchors.topMargin: ( theme ? theme.spaceNudge : 4 )
+                                            readonly property real vcLeftPad: ( theme ? theme.spaceCompact : 8 )
+                                            readonly property real vcRightPad: ( theme ? theme.spaceCompact : 8 )
+                                            readonly property real vcTopPad: ( theme ? theme.spaceNudge : 4 )
+                                            readonly property real vcBottomPad: ( theme ? theme.spaceCompact : 8 )
+                                            readonly property real vcGap: ( theme ? theme.spaceNudge : 4 )
+
+                                            // Always reserve space for the vertical scroll bar so it cannot
+                                            // cover list content.
+                                            anchors.leftMargin: vcLeftPad
+                                            anchors.rightMargin: vcRightPad + sourcesScrollBar.implicitWidth + vcGap
+                                            anchors.bottomMargin: vcBottomPad
+                                                + ( sourcesHScrollBar.visible ? ( sourcesHScrollBar.implicitHeight + vcGap ) : 0 )
+                                            anchors.topMargin: vcTopPad
                                             clip: true
                                             model: sourceModel
                                             spacing: 6
@@ -1377,12 +1373,7 @@ Page {
                                             ScrollBar.horizontal: sourcesHScrollBar
 
                                             delegate: Rectangle {
-                                                width: {
-                                                    const vBarSpace = root.sourcesNeedsVScroll
-                                                        ? ( sourcesScrollBar.implicitWidth + ( theme ? theme.spaceNudge : 4 ) )
-                                                        : 0
-                                                    return Math.max( ListView.view.width - vBarSpace, root.sourcesContentWidthHint - vBarSpace )
-                                                }
+                                                width: Math.max( ListView.view.width, root.sourcesContentWidthHint )
                                                 height: {
                                                     if ( rowType === "header" ) {
                                                         return ( theme ? Math.max( 22, theme.fontBasePx + 6 ) : 24 )
@@ -1490,14 +1481,14 @@ Page {
                                             policy: ScrollBar.AsNeeded
                                             orientation: Qt.Vertical
 
-                                            readonly property real vcGap: ( theme ? theme.spaceNudge : 4 )
-
                                             x: sourcesFrame.width - ( theme ? theme.spaceCompact : 8 ) - width
                                             y: ( theme ? theme.spaceNudge : 4 )
                                             height: sourcesFrame.height
                                                 - ( theme ? theme.spaceNudge : 4 )
                                                 - ( theme ? theme.spaceCompact : 8 )
-                                                - ( root.sourcesNeedsHScroll ? ( sourcesHScrollBar.implicitHeight + vcGap ) : 0 )
+                                                - ( sourcesHScrollBar.visible
+                                                    ? ( sourcesHScrollBar.implicitHeight + ( theme ? theme.spaceNudge : 4 ) )
+                                                    : 0 )
                                         }
 
                                         VcScrollBar {
@@ -1507,14 +1498,12 @@ Page {
                                             policy: ScrollBar.AsNeeded
                                             orientation: Qt.Horizontal
 
-                                            readonly property real vcGap: ( theme ? theme.spaceNudge : 4 )
-
                                             x: ( theme ? theme.spaceCompact : 8 )
                                             y: sourcesFrame.height - ( theme ? theme.spaceCompact : 8 ) - height
                                             width: sourcesFrame.width
                                                 - ( theme ? theme.spaceCompact : 8 )
                                                 - ( theme ? theme.spaceCompact : 8 )
-                                                - ( root.sourcesNeedsVScroll ? ( sourcesScrollBar.implicitWidth + vcGap ) : 0 )
+                                                - ( sourcesScrollBar.implicitWidth + ( theme ? theme.spaceNudge : 4 ) )
                                         }
                                     }
 

@@ -15,6 +15,7 @@ target_link_libraries( vcstream_devices_catalogue PRIVATE
     Qt6::Multimedia
     vcstream_warnings
     vcstream_platform_shim_qtmultimediarescan
+    vcstream_platform_shim_dshowcameraenum
 )
 
 target_include_directories( vcstream_devices_catalogue PUBLIC

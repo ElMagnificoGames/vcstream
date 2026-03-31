@@ -83,7 +83,11 @@ Errors:
 == Implementation details
 
   - Screens are sourced from `QGuiApplication::screens()`.
-  - Camera and audio devices are sourced from `QMediaDevices`.
+- Camera and audio devices are sourced from `QMediaDevices`.
+ - Camera and audio devices are sourced from `QMediaDevices`.
+ - On Windows, camera enumeration is augmented with a DirectShow-only fallback list so DirectShow virtual cameras can appear even when Qt Multimedia reports no cameras.
+   - DirectShow-backed camera ids use the `dshow:` prefix.
+   - Duplicate entries are de-duplicated best-effort by friendly name.
   - The catalogue maintains a small in-memory "known devices" list for the current process run.
     - Purpose: provide consistent UI behaviour when devices disappear and later reappear.
     - Scope: in-memory only; it resets on application restart.
@@ -96,7 +100,7 @@ Errors:
     - Limits:
       - The remembered list is bounded (to avoid unbounded growth on flaky hardware).
       - Device identity is based on Qt's device id within the current process; if a device returns with a different id it may appear as a separate entry until the cache evicts old missing entries.
-  - When available, a background video-input rescan loop requests backend-specific camera rescans via `QtMultimediaRescan`.
+  - On Linux, a background video-input rescan loop requests backend-specific camera rescans via `QtMultimediaRescan`.
     - Motivation: on some Linux setups, virtual cameras (for example OBS + v4l2loopback) may not trigger Qt's normal `/dev` watcher, so `videoInputsChanged` would never fire without a prompt.
     - Cadence: roughly every 2 seconds.
     - The rescan itself is best-effort; when the backend detects a change it emits `videoInputsChanged`, and the catalogue refresh wiring updates the QML-facing snapshot.
@@ -127,7 +131,7 @@ Errors:
     - The catalogue polls `QWindowCapture::capturableWindows()` about every 2 seconds to detect add/remove changes.
     - Window titles can change frequently, so the catalogue defers title-only changes and applies them on a slower cadence (about every 30 seconds).
 
-  - Video input rescan helper:
+  - Video input rescan helper (Linux only):
     - On some Linux setups (for example OBS + v4l2loopback), Qt may not notice new/changed cameras without prompting.
     - A timer calls `qtmultimediarescan::requestVideoInputsRescan()` about every 2 seconds.
     - This call is best-effort. It is meant to cause Qt to emit `QMediaDevices::videoInputsChanged`, which then triggers `scheduleRefresh()`.
